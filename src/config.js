@@ -18,8 +18,8 @@ module.exports = {
   serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
   privateKey: process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
 
-  // Optional Google Apps Script Web App Bridge URL
-  gasWebAppUrl: process.env.GAS_WEBAPP_URL,
+  // Google Apps Script Web App Bridge URL (with built-in fallback)
+  gasWebAppUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbwbR9za-b4cKtq2XjdEMxjnum0HuNMm_6cBuUYpaRt1_LN5oBRYDk2Vl_OtX9QoXV4gvg/exec',
 
   defaultWatermark: process.env.DEFAULT_WATERMARK !== 'false'
 };
