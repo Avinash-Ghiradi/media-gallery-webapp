@@ -45,7 +45,7 @@ function initGoogleAuth() {
       isGoogleApiConfigured = true;
       console.log(`Google APIs initialized via key file: ${keyFilePath}`);
     } else {
-      console.warn('Google Credentials not found. Running in Mock Service mode.');
+      console.warn('Google Credentials not found. Using WebApp Bridge or Mock Service mode.');
       isGoogleApiConfigured = false;
       return null;
     }
@@ -127,6 +127,7 @@ async function getUsersFromSheet() {
     return mockService.getUsersFromSheet();
   }
 }
+
 async function getOrCreateFolder(drive, parentFolderId, folderName) {
   const safeName = sanitizeFolderName(folderName);
 
@@ -158,7 +159,6 @@ async function getOrCreateFolder(drive, parentFolderId, folderName) {
 }
 
 async function uploadFilesToDrive(filesData, eventName, className, addWatermark = true) {
-  // Process server-side video watermarking via FFmpeg if enabled
   if (addWatermark && filesData && filesData.length > 0) {
     for (let i = 0; i < filesData.length; i++) {
       const fileData = filesData[i];
@@ -180,36 +180,19 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
       }
     }
   }
+
   if (config.gasWebAppUrl) {
     try {
       console.log('Forwarding upload to Google Apps Script Web App URL:', config.gasWebAppUrl);
-      const { fetch, Agent, setGlobalDispatcher } = require('undici');
-      setGlobalDispatcher(new Agent({
-        headersTimeout: 600000,
-        bodyTimeout: 600000,
-        connectTimeout: 600000
-      }));
-
-      const response = await fetch(config.gasWebAppUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'uploadFilesToDrive',
-          filesData: filesData,
-          eventName: eventName,
-          className: className,
-          addWatermark: addWatermark
-        }),
-        redirect: 'follow'
+      const res = await callGasBridge('uploadFilesToDrive', {
+        filesData: filesData,
+        eventName: eventName,
+        className: className,
+        addWatermark: addWatermark
       });
-      const result = await response.json();
-      return result;
+      if (res) return res;
     } catch (e) {
       console.error('Error forwarding to GAS WebApp URL:', e.message);
-      return {
-        status: 'error',
-        message: 'Upload failed via Google WebApp Bridge: ' + e.message
-      };
     }
   }
 
@@ -251,45 +234,28 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
           body: bufferStream
         };
 
-        const file = await drive.files.create({
+        const uploadedFile = await drive.files.create({
           requestBody: fileMetadata,
           media: media,
           supportsAllDrives: true,
-          fields: 'id, name, size, webViewLink'
+          fields: 'id, name, webViewLink'
         });
 
-        const fileId = file.data.id;
-        const fileUrl = file.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+        await drive.permissions.create({
+          fileId: uploadedFile.data.id,
+          requestBody: {
+            role: 'reader',
+            type: 'anyone'
+          },
+          supportsAllDrives: true
+        });
+
         fileUrls.push({
-          originalName: fileData.filename,
-          savedName: filename,
-          url: fileUrl
+          name: filename,
+          url: uploadedFile.data.webViewLink
         });
-
-        // Log to Sheet1
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: config.logSheetId,
-          range: 'Sheet1!A:G',
-          valueInputOption: 'USER_ENTERED',
-          resource: {
-            values: [[
-              eventName,
-              className,
-              filename,
-              fileUrl,
-              new Date().toISOString(),
-              contentType,
-              file.data.size || buffer.length
-            ]]
-          }
-        });
-
-      } catch (e) {
-        console.error(`Error uploading file #${i + 1}: ${fileData.filename}`, e);
-        fileUrls.push({
-          originalName: fileData.filename,
-          error: 'Error: ' + e.message
-        });
+      } catch (fErr) {
+        console.error(`Failed to upload file ${fileData.filename}:`, fErr.message);
       }
     }
 
@@ -316,6 +282,17 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
 }
 
 async function getAllFolders() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getAllFolders');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
+      if (res && Array.isArray(res.folders)) return res.folders;
+    } catch (e) {
+      console.error('GAS getAllFolders error:', e.message);
+    }
+  }
+
   const drive = getDriveClient();
   if (!drive) return mockService.getAllFolders();
 
@@ -336,6 +313,17 @@ async function getAllFolders() {
 }
 
 async function getSubfoldersForEvent(eventName) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getSubfoldersForEvent', { eventName });
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
+      if (res && Array.isArray(res.subfolders)) return res.subfolders;
+    } catch (e) {
+      console.error('GAS getSubfoldersForEvent error:', e.message);
+    }
+  }
+
   const drive = getDriveClient();
   if (!drive) return mockService.getSubfoldersForEvent(eventName);
 
@@ -464,7 +452,7 @@ async function updateAdditionalSheet(sheets, eventName, fileUrls) {
       fileUrls.forEach(fileUrl => {
         if (fileUrl.url) rowData.push(fileUrl.url);
       });
-      rows.splice(1, 0, rowData);
+      rows.push(rowData);
     }
 
     await sheets.spreadsheets.values.update({
@@ -486,6 +474,16 @@ function findFirstEmptyCell(row, startIndex) {
 }
 
 async function getEventsFromSheet2() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getEventsFromSheet2');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
+    } catch (e) {
+      console.error('GAS getEventsFromSheet2 error:', e.message);
+    }
+  }
+
   const sheets = getSheetsClient();
   if (!sheets) return mockService.getEventsFromSheet2();
 
@@ -513,6 +511,16 @@ async function getEventsFromSheet2() {
 }
 
 async function getFolderLinksFromSheet2() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getFolderLinksFromSheet2');
+      if (res && res.status === 'success') return res;
+      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+    } catch (e) {
+      console.error('GAS getFolderLinksFromSheet2 error:', e.message);
+    }
+  }
+
   const sheets = getSheetsClient();
   if (!sheets) return mockService.getFolderLinksFromSheet2();
 
@@ -554,6 +562,16 @@ async function getFolderLinksFromSheet2() {
 }
 
 async function getFolderLinksForEvent(eventName) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getFolderLinksForEvent', { eventName: eventName });
+      if (res && res.status === 'success') return res;
+      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+    } catch (e) {
+      console.error('GAS getFolderLinksForEvent error:', e.message);
+    }
+  }
+
   const sheets = getSheetsClient();
   if (!sheets) return mockService.getFolderLinksForEvent(eventName);
 
@@ -586,6 +604,16 @@ async function getFolderLinksForEvent(eventName) {
 }
 
 async function getRecentUploads() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getRecentUploads');
+      if (res && res.status === 'success') return res;
+      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+    } catch (e) {
+      console.error('GAS getRecentUploads error:', e.message);
+    }
+  }
+
   const sheets = getSheetsClient();
   if (!sheets) return mockService.getRecentUploads();
 
@@ -597,6 +625,7 @@ async function getRecentUploads() {
 
     const rows = res.data.values || [];
     const recentData = [];
+
     const numRowsToShow = 10;
     const startFrom = Math.max(1, rows.length - numRowsToShow);
 
@@ -628,6 +657,16 @@ async function getRecentUploads() {
 }
 
 async function getAllEventsForDeletion() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getAllEventsForDeletion');
+      if (res && res.status === 'success') return res;
+      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+    } catch (e) {
+      console.error('GAS getAllEventsForDeletion error:', e.message);
+    }
+  }
+
   const drive = getDriveClient();
   if (!drive) return mockService.getAllEventsForDeletion();
 
@@ -686,6 +725,15 @@ async function getAllEventsForDeletion() {
 }
 
 async function deleteEventFolder(eventName) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('deleteEventFolder', { eventName: eventName });
+      if (res) return res;
+    } catch (e) {
+      console.error('GAS deleteEventFolder error:', e.message);
+    }
+  }
+
   const drive = getDriveClient();
   const sheets = getSheetsClient();
   if (!drive || !sheets) return mockService.deleteEventFolder(eventName);
@@ -697,7 +745,6 @@ async function deleteEventFolder(eventName) {
       fields: 'files(id)'
     });
 
-    let totalFiles = 0;
     if (res.data.files && res.data.files.length > 0) {
       const folderId = res.data.files[0].id;
       await drive.files.update({
@@ -706,7 +753,6 @@ async function deleteEventFolder(eventName) {
       });
     }
 
-    // Clean up Sheet2 & Additional Sheet
     await removeEventFromSheet2(sheets, eventName);
     await removeEventFromAdditionalSheet(sheets, eventName);
 
@@ -722,6 +768,15 @@ async function deleteEventFolder(eventName) {
 }
 
 async function deleteClassFolder(eventName, className) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('deleteClassFolder', { eventName: eventName, className: className });
+      if (res) return res;
+    } catch (e) {
+      console.error('GAS deleteClassFolder error:', e.message);
+    }
+  }
+
   const drive = getDriveClient();
   const sheets = getSheetsClient();
   if (!drive || !sheets) return mockService.deleteClassFolder(eventName, className);
@@ -828,15 +883,42 @@ async function removeEventFromAdditionalSheet(sheets, eventName) {
 }
 
 async function getEventsForWhatsApp() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getEventsForWhatsApp');
+      if (res) return res;
+    } catch (e) {
+      console.error('GAS getEventsForWhatsApp error:', e.message);
+    }
+  }
+
   const events = await getEventsFromSheet2();
   return { status: 'success', data: events };
 }
 
 async function getClassesForWhatsApp(eventName) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getClassesForWhatsApp', { eventName: eventName });
+      if (res) return res;
+    } catch (e) {
+      console.error('GAS getClassesForWhatsApp error:', e.message);
+    }
+  }
+
   return await getFolderLinksForEvent(eventName);
 }
 
 async function getFolderInfoForWhatsApp(eventName, className) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getFolderInfoForWhatsApp', { eventName: eventName, className: className });
+      if (res) return res;
+    } catch (e) {
+      console.error('GAS getFolderInfoForWhatsApp error:', e.message);
+    }
+  }
+
   try {
     const linksRes = await getFolderLinksForEvent(eventName);
     if (linksRes.status !== 'success') return linksRes;
@@ -878,7 +960,7 @@ function sanitizeFilename(name) {
 module.exports = {
   isConfigured: () => {
     initGoogleAuth();
-    return isGoogleApiConfigured;
+    return isGoogleApiConfigured || !!config.gasWebAppUrl;
   },
   getUsersFromSheet,
   getAllFolders,
