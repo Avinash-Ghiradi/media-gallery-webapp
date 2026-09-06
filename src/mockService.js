@@ -9,22 +9,6 @@ const rootFolderUrl = `https://drive.google.com/drive/folders/${config.driveRoot
 let mockEvents = {};
 
 let recentUploadsLog = [];
-let recentUploadsLog = [
-  {
-    eventName: 'Annual Sports Day 2026',
-    className: 'Grade 5A',
-    folderUrl: rootFolderUrl,
-    uploadTime: 'Just now',
-    isNew: true
-  },
-  {
-    eventName: 'Science Fair 2026',
-    className: 'Grade 8',
-    folderUrl: rootFolderUrl,
-    uploadTime: 'Recently',
-    isNew: false
-  }
-];
 
 function getUsersFromSheet() {
   return {
