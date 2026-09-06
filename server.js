@@ -8,6 +8,9 @@ const googleService = require('./src/googleService');
 
 const app = express();
 
+// Trust reverse proxy (required for Railway / Render / Heroku / Cloudflare)
+app.set('trust proxy', 1);
+
 // Enable CORS
 app.use(cors());
 
@@ -15,15 +18,16 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// Express Session
+// Express Session configuration
 app.use(session({
   secret: config.sessionSecret,
-  resave: false,
+  resave: true,
   saveUninitialized: false,
   cookie: {
     maxAge: config.sessionTimeoutMs,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production'
+    secure: false,
+    sameSite: 'lax'
   }
 }));
 
@@ -46,6 +50,12 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Password is required' });
   }
   const result = await auth.authenticateUser(req, password);
+  if (result.status === 'success') {
+    return req.session.save((err) => {
+      if (err) console.error('Session save error:', err);
+      res.json(result);
+    });
+  }
   res.json(result);
 });
 
