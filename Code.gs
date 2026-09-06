@@ -10,6 +10,41 @@ var URL_SHEET_ID = '19BwOHx7jmTjCQlh-oiBtXHO_ugG9rpgRghly0sPqJng';
 var DRIVE_ROOT_FOLDER_ID = '1bK-DO_ZtsUe2ASqMWqr0St7zoUv8UlNw';
 
 function doGet(e) {
+  try {
+    if (e && e.parameter && e.parameter.action) {
+      var action = e.parameter.action;
+      var res;
+      if (action === 'getAllFolders') {
+        res = getAllExistingFolders();
+      } else if (action === 'getSubfoldersForEvent') {
+        res = getSubfoldersForEvent(e.parameter.eventName);
+      } else if (action === 'getEventsFromSheet2') {
+        res = getEventsFromSheet2();
+      } else if (action === 'getFolderLinksFromSheet2') {
+        res = getFolderLinksFromSheet2();
+      } else if (action === 'getFolderLinksForEvent') {
+        res = getFolderLinksForEvent(e.parameter.eventName);
+      } else if (action === 'getRecentUploads') {
+        res = getRecentUploads();
+      } else if (action === 'getAllEventsForDeletion') {
+        res = getAllEventsForDeletion();
+      } else if (action === 'getEventsForWhatsApp') {
+        res = getEventsForWhatsApp();
+      } else if (action === 'getClassesForWhatsApp') {
+        res = getClassesForWhatsApp(e.parameter.eventName);
+      } else if (action === 'getFolderInfoForWhatsApp') {
+        res = getFolderInfoForWhatsApp(e.parameter.eventName, e.parameter.className);
+      } else if (action === 'getUsersFromSheet') {
+        res = getUsersFromSheet();
+      }
+
+      if (res) {
+        return ContentService.createTextOutput(JSON.stringify(res))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+  } catch (err) {}
+
   return ContentService.createTextOutput("Media Gallery Web App Bridge Active!")
     .setMimeType(ContentService.MimeType.TEXT);
 }
