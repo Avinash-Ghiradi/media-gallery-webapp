@@ -6,29 +6,9 @@ const config = require('./config');
 
 const rootFolderUrl = `https://drive.google.com/drive/folders/${config.driveRootFolderId}`;
 
-let mockEvents = {
-  'Annual Sports Day 2026': {
-    classes: {
-      'Grade 5A': [
-        { savedName: 'sports_1.jpg', originalName: 'photo1.jpg', url: rootFolderUrl, size: 1048576, date: new Date().toISOString() },
-        { savedName: 'sports_2.jpg', originalName: 'photo2.jpg', url: rootFolderUrl, size: 2097152, date: new Date().toISOString() }
-      ],
-      'Grade 6B': [
-        { savedName: 'sports_3.jpg', originalName: 'photo3.jpg', url: rootFolderUrl, size: 1572864, date: new Date().toISOString() }
-      ]
-    },
-    dateCreated: new Date().toISOString()
-  },
-  'Science Fair 2026': {
-    classes: {
-      'Grade 8': [
-        { savedName: 'science_1.jpg', originalName: 'exp.jpg', url: rootFolderUrl, size: 3145728, date: new Date().toISOString() }
-      ]
-    },
-    dateCreated: new Date().toISOString()
-  }
-};
+let mockEvents = {};
 
+let recentUploadsLog = [];
 let recentUploadsLog = [
   {
     eventName: 'Annual Sports Day 2026',
