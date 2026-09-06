@@ -72,13 +72,28 @@ function getSheetsClient() {
 async function callGasBridge(action, payload = {}) {
   if (!config.gasWebAppUrl) return null;
   try {
-    const res = await fetch(config.gasWebAppUrl, {
+    const url = new URL(config.gasWebAppUrl);
+    url.searchParams.set('action', action);
+    for (const k in payload) {
+      if (payload[k] !== undefined && payload[k] !== null && typeof payload[k] !== 'object') {
+        url.searchParams.set(k, payload[k]);
+      }
+    }
+
+    const res = await fetch(url.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: action, ...payload })
+      body: JSON.stringify({ action: action, ...payload }),
+      redirect: 'follow'
     });
+
     if (res.ok) {
-      return await res.json();
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        console.error(`GAS Bridge JSON parse error for ${action}:`, text.substring(0, 100));
+      }
     }
   } catch (err) {
     console.error(`GAS Bridge request failed for ${action}:`, err.message);
