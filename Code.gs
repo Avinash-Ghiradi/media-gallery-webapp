@@ -372,23 +372,51 @@ function getOrCreateFolder(parentFolder, folderName) {
   } catch(e){}
   
   return folder;
-}
-
 /**
- * Gets all existing folders under the root folder
+ * Gets all existing folders under the root folder and spreadsheet logs
  */
 function getAllExistingFolders() {
   try {
-    var rootFolderId = DRIVE_ROOT_FOLDER_ID;
-    var rootFolder = DriveApp.getFolderById(rootFolderId);
-    var folders = rootFolder.getFolders();
     var folderNames = [];
-    
-    while (folders.hasNext()) {
-      var folder = folders.next();
-      folderNames.push(folder.getName());
+
+    // 1. Scan Google Drive root folder
+    try {
+      var rootFolderId = DRIVE_ROOT_FOLDER_ID;
+      var rootFolder = DriveApp.getFolderById(rootFolderId);
+      var folders = rootFolder.getFolders();
+      while (folders.hasNext()) {
+        var folder = folders.next();
+        var name = folder.getName();
+        if (folderNames.indexOf(name) === -1) {
+          folderNames.push(name);
+        }
+      }
+    } catch(dErr) {
+      console.error('Drive root folder scan error:', dErr);
     }
-    
+
+    // 2. Scan Sheet1, Sheet2, and data tabs in Spreadsheet
+    try {
+      var spreadsheet = SpreadsheetApp.openById(LOG_SHEET_ID);
+      var sheetNames = ['Sheet1', 'Sheet2', 'data'];
+      sheetNames.forEach(function(sName) {
+        var sheet = spreadsheet.getSheetByName(sName);
+        if (sheet && sheet.getLastRow() > 1) {
+          var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+          data.forEach(function(row) {
+            if (row[0] && row[0].toString().trim() !== '' && row[0].toString().trim().toLowerCase() !== 'name' && row[0].toString().trim().toLowerCase() !== 'event name') {
+              var eventName = row[0].toString().trim();
+              if (folderNames.indexOf(eventName) === -1) {
+                folderNames.push(eventName);
+              }
+            }
+          });
+        }
+      });
+    } catch(sErr) {
+      console.error('Sheet scan error:', sErr);
+    }
+
     return folderNames.sort();
   } catch (e) {
     console.error('Error getting folders:', e);
@@ -397,58 +425,56 @@ function getAllExistingFolders() {
 }
 
 /**
- * Gets all existing subfolders under a specific event folder
+ * Gets all existing subfolders under a specific event folder and spreadsheet logs
  */
 function getSubfoldersForEvent(eventName) {
   try {
-    var rootFolderId = DRIVE_ROOT_FOLDER_ID;
-    var rootFolder = DriveApp.getFolderById(rootFolderId);
-    var eventFolders = rootFolder.getFoldersByName(eventName);
-    
-    if (!eventFolders.hasNext()) {
-      return [];
-    }
-    
-    var eventFolder = eventFolders.next();
-    var subfolders = eventFolder.getFolders();
     var subfolderNames = [];
-    
-    while (subfolders.hasNext()) {
-      var subfolder = subfolders.next();
-      subfolderNames.push(subfolder.getName());
-    }
-    
+
+    // 1. Scan Google Drive subfolders for event
+    try {
+      var rootFolderId = DRIVE_ROOT_FOLDER_ID;
+      var rootFolder = DriveApp.getFolderById(rootFolderId);
+      var eventFolders = rootFolder.getFoldersByName(eventName);
+      if (eventFolders.hasNext()) {
+        var eventFolder = eventFolders.next();
+        var subfolders = eventFolder.getFolders();
+        while (subfolders.hasNext()) {
+          var subfolder = subfolders.next();
+          var sName = subfolder.getName();
+          if (subfolderNames.indexOf(sName) === -1) {
+            subfolderNames.push(sName);
+          }
+        }
+      }
+    } catch(dErr) {}
+
+    // 2. Scan Sheet1 & Sheet2 for event classes
+    try {
+      var spreadsheet = SpreadsheetApp.openById(LOG_SHEET_ID);
+      var sheetNames = ['Sheet1', 'Sheet2'];
+      sheetNames.forEach(function(sName) {
+        var sheet = spreadsheet.getSheetByName(sName);
+        if (sheet && sheet.getLastRow() > 1) {
+          var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+          data.forEach(function(row) {
+            if (row[0] && row[0].toString().trim() === eventName && row[1] && row[1].toString().trim() !== '') {
+              var className = row[1].toString().trim();
+              if (subfolderNames.indexOf(className) === -1) {
+                subfolderNames.push(className);
+              }
+            }
+          });
+        }
+      });
+    } catch(sErr) {}
+
     return subfolderNames.sort();
   } catch (e) {
-    console.error('Error getting subfolders:', e);
+    console.error('Error getting subfolders:', e.message);
     return [];
   }
-}
-
-/**
- * Updates Sheet2
- */
-function updateSheet2(sheet2, eventName, className, folderUrl, fileUrls) {
-  try {
-    if (sheet2.getLastRow() === 0) {
-      var headers = ['Event Name', 'Class Name', 'Folder URL'];
-      var maxImages = 10;
-      for (var i = 1; i <= maxImages; i++) {
-        headers.push('Image ' + i + ' URL');
-      }
-      sheet2.getRange(1, 1, 1, headers.length).setValues([headers]);
-    }
-    
-    var dataRange = sheet2.getDataRange();
-    var data = dataRange.getValues();
-    
-    var existingRowIndex = -1;
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === eventName && data[i][1] === className) {
-        existingRowIndex = i;
-        break;
-      }
-    }
+}    }
     
     if (existingRowIndex !== -1) {
       var row = data[existingRowIndex];
