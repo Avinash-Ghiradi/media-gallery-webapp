@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/">
+  <title>Media Gallery Uploader</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <!-- Login Overlay -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-container">
+      <div class="login-header">
+        <div class="logo-container">
+          <img id="login-school-logo" class="login-logo" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="Success School Indi Logo" onerror="handleLoginLogoError()">
+          <div class="login-logo-fallback" style="display: none;">
+            <i class="fas fa-graduation-cap"></i>
+          </div>
+        </div>
+        <div class="school-name">SUCCESS SCHOOL INDI</div>
+        <div class="school-tagline">Digital Media Gallery</div>
+      </div>
+      
+      <div class="login-content">
+        <div class="login-title">
+          <i class="fas fa-lock"></i> Admin Portal Login
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Enter Password</label>
+          <div class="input-wrapper">
+            <input type="password" id="password" placeholder="Enter your password" onkeypress="handleEnterKey(event)" style="padding-left: 2.5rem;">
+            <i class="fas fa-key input-icon" style="left: 1rem;"></i>
+          </div>
+        </div>
+        
+        <button class="login-btn" onclick="login()" id="loginBtn">
+          <i class="fas fa-sign-in-alt"></i> Login
+        </button>
+        
+        <div class="login-loading" id="loginLoading">
+          <div class="login-spinner"></div>
+          Authenticating...
+        </div>
+        
+        <div id="loginStatusMessage" class="status-message"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Application -->
+  <div class="container" id="mainApp" style="display: none;">
+    <header class="header">
+      <div class="brand">
+        <img id="school-logo" class="logo" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="Success School Indi Logo" onerror="handleLogoError()">
+        <div class="logo-fallback" style="display: none;">
+          <i class="fas fa-graduation-cap"></i>
+        </div>
+        <div class="school-info">
+          <div class="school-name">SUCCESS SCHOOL INDI</div>
+          <div class="school-tagline">Digital Media Gallery</div>
+        </div>
+      </div>
+      <div class="user-info">
+        <div class="user-avatar">
+          <i class="fas fa-user-shield"></i>
+        </div>
+        <div>
+          <div id="user-name">Admin Portal</div>
+          <div style="font-size: 0.75rem; opacity: 0.8;">
+            <a href="#" onclick="logout(); return false;" style="color: white; text-decoration: none;">
+              <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tabs Navigation -->
+    <div class="tabs-navigation">
+      <button class="tab-button active" onclick="switchTab('upload')">
+        <i class="fas fa-cloud-upload-alt"></i> Upload Media
+      </button>
+      <button class="tab-button" onclick="switchTab('folders')">
+        <i class="fas fa-folder"></i> View Folder Links
+      </button>
+      <button class="tab-button" onclick="switchTab('recent')">
+        <i class="fas fa-history"></i> Recently Uploaded
+        <span class="badge" id="recentBadge" style="display: none;">0</span>
+      </button>
+      <button class="tab-button" onclick="switchTab('whatsapp')">
+        <i class="fab fa-whatsapp"></i> WhatsApp Share
+      </button>
+      <button class="tab-button" onclick="switchTab('delete')">
+        <i class="fas fa-trash-alt"></i> Delete Folders
+      </button>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="uploadTab" class="tab-content active">
+      <div class="content">
+        <h1><i class="fas fa-cloud-upload-alt"></i> Media Uploader</h1>
+        
+        <div class="form-row">
+          <div class="form-col">
+            <div class="form-group">
+              <label for="eventName">Event</label>
+              <div class="input-wrapper">
+                <select id="eventName" onchange="loadClassFolders()">
+                  <option value="">-- Select Event --</option>
+                  <option value="new">+ Create New Event</option>
+                </select>
+                <div class="input-icon">
+                  <i class="fas fa-calendar-alt"></i>
+                </div>
+              </div>
+              <input type="text" id="newEventName" style="display: none; margin-top: 10px;" placeholder="Enter new event name">
+            </div>
+          </div>
+          <div class="form-col">
+            <div class="form-group">
+              <label for="className">Class</label>
+              <div class="input-wrapper">
+                <select id="className" onchange="handleClassSelectChange()">
+                  <option value="">-- Select Class --</option>
+                  <option value="new">+ Create New Class</option>
+                </select>
+                <div class="input-icon">
+                  <i class="fas fa-users"></i>
+                </div>
+              </div>
+              <input type="text" id="newClassName" style="display: none; margin-top: 10px;" placeholder="Enter new class name">
+            </div>
+          </div>
+        </div>
+        
+        <div class="watermark-toggle">
+          <div class="toggle-label">
+            <div>Watermark & Border</div>
+            <div class="toggle-description">
+              Default: ON. Turn OFF when watermark/border is not required
+            </div>
+          </div>
+          <div class="watermark-status">
+            <span id="watermarkStatusText">ON</span>
+            <label class="switch">
+              <input type="checkbox" id="watermarkToggle" checked onchange="toggleWatermark()">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Upload Media Files</label>
+          <div class="file-upload-area" id="dropArea" 
+               ondragover="handleDragOver(event)" 
+               ondragleave="handleDragLeave(event)" 
+               ondrop="handleDrop(event)">
+            <div class="file-upload-icon">
+              <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <div class="file-upload-text">Drag & drop files here</div>
+            <div class="file-upload-hint">Supports JPG, PNG, GIF, MP4, PDF (Max 50MB each)</div>
+            <button class="file-upload-btn" onclick="document.getElementById('fileInput').click(); event.stopPropagation();">
+              <i class="fas fa-folder-open"></i> Browse Files
+            </button>
+            <input type="file" id="fileInput" multiple accept="image/*,video/*,.pdf" onchange="handleFileSelect()">
+          </div>
+        </div>
+        
+        <div class="preview-section">
+          <div class="preview-header">
+            <h3><i class="fas fa-images" style="margin-right: 8px;"></i> Selected Files</h3>
+            <div class="file-count" id="fileCount">0 files selected</div>
+          </div>
+          
+          <div id="preview"></div>
+          
+          <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          
+          <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing files, please wait...</p>
+          </div>
+          
+          <div id="status"></div>
+        </div>
+        
+        <div class="action-buttons">
+          <button class="btn-secondary" onclick="clearSelection()">
+            <i class="fas fa-trash-alt"></i> Clear All
+          </button>
+          <button class="btn-primary" onclick="uploadFiles()">
+            <i class="fas fa-cloud-upload-alt"></i> Upload Files
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Folders Tab -->
+    <div id="foldersTab" class="tab-content">
+      <div class="content">
+        <h1><i class="fas fa-folder"></i> View Folder Links</h1>
+        
+        <div class="folders-section">
+          <div class="folders-controls">
+            <select id="folderEventSelect">
+              <option value="">-- Select Event to View Folders --</option>
+              <option value="all">All Events</option>
+            </select>
+            <button class="view-folders-btn" onclick="loadFolderLinks()">
+              <i class="fas fa-search"></i> View Folders
+            </button>
+          </div>
+        
+          <div id="folderLinksContainer" class="links-container" style="display: none;">
+            <div class="links-header">
+              <h3 id="foldersTitle"></h3>
+              <button class="copy-all-btn" onclick="copyAllFolderLinks()">
+                <i class="fas fa-copy"></i> Copy All
+              </button>
+            </div>
+            <div id="folderLinks" class="links-content">
+              <!-- Folder links will be populated here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Uploads Tab -->
+    <div id="recentTab" class="tab-content">
+      <div class="content">
+        <h1><i class="fas fa-history"></i> Recently Uploaded Folders</h1>
+        
+        <div class="recent-folders-section">
+          <div class="section-header">
+            <h3><i class="fas fa-clock"></i> Latest Uploads</h3>
+            <button class="refresh-btn" onclick="loadRecentFolders(true)">
+              <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+          </div>
+          
+          <div id="recentFoldersContainer">
+            <!-- Recent folders will be loaded here -->
+            <div class="loading-recent">
+              <div class="spinner"></div>
+              <p>Loading recent uploads...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp Sharing Tab -->
+    <div id="whatsappTab" class="tab-content">
+      <div class="content">
+        <h1><i class="fab fa-whatsapp"></i> Share on WhatsApp</h1>
+        
+        <div class="form-group">
+          <label>Select Folder to Share</label>
+          <div class="form-row">
+            <div class="form-col">
+              <div class="input-wrapper">
+                <select id="whatsappEventSelect">
+                  <option value="">-- Select Event --</option>
+                </select>
+                <div class="input-icon">
+                  <i class="fas fa-calendar-alt"></i>
+                </div>
+              </div>
+            </div>
+            <div class="form-col">
+              <div class="input-wrapper">
+                <select id="whatsappClassSelect" disabled>
+                  <option value="">-- Select Class --</option>
+                </select>
+                <div class="input-icon">
+                  <i class="fas fa-users"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Preview Message</label>
+          <div id="whatsappPreview">
+            Select an event and class to preview the WhatsApp message...
+          </div>
+        </div>
+        
+        <div class="action-buttons">
+          <button class="btn-secondary" onclick="copyWhatsAppMessage()" id="copyWhatsAppBtn">
+            <i class="far fa-copy"></i> Copy Message
+          </button>
+          <button class="btn-primary" onclick="openWhatsApp()" id="openWhatsAppBtn" disabled>
+            <i class="fab fa-whatsapp"></i> Open WhatsApp Web
+          </button>
+        </div>
+        
+        <div class="whatsapp-tips">
+          <h4>
+            <i class="fas fa-lightbulb"></i> Sharing Tips:
+          </h4>
+          <ul style="margin: 0.5rem 0 0 1.5rem; color: var(--dark);">
+            <li>WhatsApp Web must be open in your browser</li>
+            <li>Select a contact or group before sending</li>
+            <li>You can edit the message before sending</li>
+            <li>The link will open directly in Google Drive</li>
+            <li>Use the "Copy Message" button to share on mobile</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Tab -->
+    <div id="deleteTab" class="tab-content">
+      <div class="content">
+        <h1><i class="fas fa-trash-alt"></i> Manage & Delete Folders</h1>
+        
+        <div class="delete-warning">
+          <div class="delete-warning-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+          </div>
+          <div class="delete-warning-content">
+            <h3>⚠️ Important Warning</h3>
+            <p>
+              Deleting folders is permanent and cannot be undone. All files within the deleted folder 
+              will be moved to Google Drive trash. Please be certain before proceeding with deletion.
+            </p>
+          </div>
+        </div>
+        
+        <div class="folders-controls" style="margin-bottom: 1.5rem;">
+          <button class="refresh-btn" onclick="loadEventsForDeletion(true)">
+            <i class="fas fa-sync-alt"></i> Refresh List
+          </button>
+        </div>
+        
+        <div id="deleteEventsContainer">
+          <div class="loading-delete">
+            <div class="spinner"></div>
+            <p>Loading events and classes...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmationModal" class="confirmation-modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3 id="modalTitle">Confirm Deletion</h3>
+      </div>
+      <div class="modal-body">
+        <p id="modalMessage"></p>
+        <div class="modal-actions">
+          <button class="modal-cancel-btn" onclick="cancelDeletion()">Cancel</button>
+          <button class="modal-confirm-btn" onclick="confirmDeletion()" id="confirmDeleteBtn">
+            <i class="fas fa-trash-alt"></i> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
