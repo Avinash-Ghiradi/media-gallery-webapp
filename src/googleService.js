@@ -69,7 +69,35 @@ function getSheetsClient() {
   return google.sheets({ version: 'v4', auth });
 }
 
+async function callGasBridge(action, payload = {}) {
+  if (!config.gasWebAppUrl) return null;
+  try {
+    const res = await fetch(config.gasWebAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action, ...payload })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.error(`GAS Bridge request failed for ${action}:`, err.message);
+  }
+  return null;
+}
+
 async function getUsersFromSheet() {
+  if (config.gasWebAppUrl) {
+    try {
+      const gasResult = await callGasBridge('getUsersFromSheet');
+      if (gasResult && typeof gasResult === 'object' && Object.keys(gasResult).length > 0) {
+        return gasResult;
+      }
+    } catch (e) {
+      console.error('GAS getUsersFromSheet error:', e.message);
+    }
+  }
+
   const sheets = getSheetsClient();
   if (!sheets) return mockService.getUsersFromSheet();
 
@@ -81,8 +109,8 @@ async function getUsersFromSheet() {
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) {
-      console.log('Users sheet empty, using fallback admin user');
-      return { 'admin': 'password123' };
+      console.log('Users sheet empty, using fallback users list');
+      return mockService.getUsersFromSheet();
     }
 
     const startRow = rows[0][0] && rows[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
@@ -99,7 +127,6 @@ async function getUsersFromSheet() {
     return mockService.getUsersFromSheet();
   }
 }
-
 async function getOrCreateFolder(drive, parentFolderId, folderName) {
   const safeName = sanitizeFolderName(folderName);
 
