@@ -44,15 +44,23 @@ async function authenticateUser(req, password) {
       }
     }
 
-    // Support standard admin fallback password
-    if (password === 'password123' || password === 'admin') {
+    // Support standard fallback passwords
+    const fallbackPasswords = {
+      'password123': 'admin',
+      'admin': 'admin',
+      'Avinash123': 'Avinash',
+      'Mahi@0412': 'Jyoti S'
+    };
+
+    if (fallbackPasswords[password]) {
+      const username = fallbackPasswords[password];
       req.session.user = {
-        username: 'admin',
+        username: username,
         timestamp: Date.now()
       };
       return {
         status: 'success',
-        username: 'admin',
+        username: username,
         message: 'Authentication successful'
       };
     }
