@@ -48,7 +48,9 @@ let recentUploadsLog = [
 
 function getUsersFromSheet() {
   return {
-    'admin': 'password123'
+    'admin': 'password123',
+    'Avinash': 'Avinash123',
+    'Jyoti S': 'Mahi@0412'
   };
 }
 
