@@ -578,10 +578,11 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
   try {
     const { logoDataUrl, logoLink } = req.body;
     if (logoLink && typeof logoLink === 'string' && logoLink.trim().startsWith('http')) {
-      const cleanLink = logoLink.trim();
+      const cleanLink = googleService.extractDriveDirectImageUrl(logoLink.trim());
       const resp = await fetch(cleanLink);
-      if (!resp.ok) {
-        return res.status(400).json({ status: 'error', message: 'Could not download image from that link.' });
+      const ctype = (resp.headers.get('content-type') || '').toLowerCase();
+      if (!resp.ok || !ctype.startsWith('image/')) {
+        return res.status(400).json({ status: 'error', message: 'Could not download an image from that link. Make sure the Drive file is shared as Anyone with the link.' });
       }
       const buf = Buffer.from(await resp.arrayBuffer());
       fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
@@ -628,10 +629,11 @@ app.post('/api/branding/photo-logo', auth.requireAdmin, async (req, res) => {
   try {
     const { logoDataUrl, logoLink } = req.body;
     if (logoLink && typeof logoLink === 'string' && logoLink.trim().startsWith('http')) {
-      const cleanLink = logoLink.trim();
+      const cleanLink = googleService.extractDriveDirectImageUrl(logoLink.trim());
       const resp = await fetch(cleanLink);
-      if (!resp.ok) {
-        return res.status(400).json({ status: 'error', message: 'Could not download image from that link.' });
+      const ctype = (resp.headers.get('content-type') || '').toLowerCase();
+      if (!resp.ok || !ctype.startsWith('image/')) {
+        return res.status(400).json({ status: 'error', message: 'Could not download an image from that link. Make sure the Drive file is shared as Anyone with the link.' });
       }
       const buf = Buffer.from(await resp.arrayBuffer());
       fs.writeFileSync(CUSTOM_PHOTO_LOGO, buf);
