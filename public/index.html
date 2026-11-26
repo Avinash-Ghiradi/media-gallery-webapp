@@ -687,6 +687,9 @@
         <div id="liveCameraQueueText" class="live-camera-queue">Ready to capture</div>
       </div>
       <div class="live-camera-top-actions">
+        <button type="button" id="liveFlashBtn" class="live-cam-icon-btn" onclick="toggleLiveCameraFlash()" title="Toggle Flash Light">
+          <i class="fas fa-bolt"></i>
+        </button>
         <button type="button" class="live-cam-icon-btn" onclick="switchLiveCameraFacing()" title="Switch Front/Rear Camera">
           <i class="fas fa-sync-alt"></i>
         </button>
@@ -706,6 +709,9 @@
         <div class="live-review-actions">
           <button type="button" class="live-review-cancel" onclick="cancelLiveCapturedPhoto()">
             <i class="fas fa-times"></i> Cancel
+          </button>
+          <button type="button" class="live-review-rotate" onclick="rotateLiveCapturedPhoto()" title="Rotate 90°">
+            <i class="fas fa-redo"></i> Rotate
           </button>
           <button type="button" class="live-review-ok" onclick="confirmLiveCapturedPhoto()">
             <i class="fas fa-check"></i> OK &amp; Upload
