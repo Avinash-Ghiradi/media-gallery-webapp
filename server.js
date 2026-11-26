@@ -231,8 +231,8 @@ app.get('/api/events/:eventName/classes', auth.requireAuth, async (req, res) => 
 
 app.post('/api/upload', auth.requireAuth, async (req, res) => {
   try {
-    const { filesData, eventName, className, addWatermark } = req.body;
-    const result = await googleService.uploadFilesToDrive(filesData, eventName, className, addWatermark);
+    const { filesData, eventName, className, addWatermark, originalFilesData } = req.body;
+    const result = await googleService.uploadFilesToDrive(filesData, eventName, className, addWatermark, originalFilesData);
     res.json(result);
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
@@ -240,8 +240,13 @@ app.post('/api/upload', auth.requireAuth, async (req, res) => {
 });
 
 // Multipart streaming upload route supporting files up to 500MB
+const uploadMultipartFields = upload.fields([
+  { name: 'files', maxCount: 50 },
+  { name: 'originalFiles', maxCount: 50 }
+]);
+
 app.post('/api/upload-multipart', auth.requireAuth, (req, res) => {
-  upload.array('files', 50)(req, res, async (uploadErr) => {
+  uploadMultipartFields(req, res, async (uploadErr) => {
     if (uploadErr) {
       const msg = uploadErr.code === 'LIMIT_FILE_SIZE'
         ? 'File exceeds the 500MB maximum size limit.'
@@ -249,7 +254,9 @@ app.post('/api/upload-multipart', auth.requireAuth, (req, res) => {
       return res.status(400).json({ status: 'error', message: msg });
     }
 
-    const uploadedFiles = req.files || [];
+    const filesMap = req.files || {};
+    const uploadedFiles = filesMap.files || [];
+    const uploadedOriginals = filesMap.originalFiles || [];
     try {
       const { eventName, className } = req.body;
       const addWatermark = req.body.addWatermark !== 'false';
@@ -258,19 +265,22 @@ app.post('/api/upload-multipart', auth.requireAuth, (req, res) => {
         return res.status(400).json({ status: 'error', message: 'No files provided' });
       }
 
-      const filesData = uploadedFiles.map((f) => ({
+      const toFileData = (f) => ({
         filename: f.originalname,
         contentType: f.mimetype,
         size: f.size,
         data: fs.readFileSync(f.path).toString('base64')
-      }));
+      });
 
-      const result = await googleService.uploadFilesToDrive(filesData, eventName, className, addWatermark);
+      const filesData = uploadedFiles.map(toFileData);
+      const originalFilesData = uploadedOriginals.map(toFileData);
+
+      const result = await googleService.uploadFilesToDrive(filesData, eventName, className, addWatermark, originalFilesData);
       res.json(result);
     } catch (err) {
       res.status(500).json({ status: 'error', message: err.message });
     } finally {
-      uploadedFiles.forEach((f) => {
+      [...uploadedFiles, ...uploadedOriginals].forEach((f) => {
         try {
           if (f.path && fs.existsSync(f.path)) fs.unlinkSync(f.path);
         } catch (e) {}
