@@ -76,6 +76,27 @@ app.post('/api/auth/logout', async (req, res) => {
   res.json(result);
 });
 
+app.post('/api/auth/change-password', auth.requireAuth, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    const cleanNew = (newPassword || '').trim();
+    if (!cleanNew || cleanNew.length < 6) {
+      return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters.' });
+    }
+    if (cleanNew === 'Success@123') {
+      return res.status(400).json({ status: 'error', message: 'Please choose a new password different from the default password (Success@123).' });
+    }
+    const result = await googleService.changeUserPassword(req.session.user.username, cleanNew);
+    if (result && result.status === 'success') {
+      req.session.user.mustChangePassword = false;
+      return req.session.save(() => res.json(result));
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 /* ==========================================================================
    UPLOAD & DRIVE ROUTES (Protected)
    ========================================================================== */
@@ -286,6 +307,15 @@ app.delete('/api/users/:username', auth.requireAdmin, async (req, res) => {
   try {
     const { username } = req.params;
     const result = await googleService.deleteUser(username);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/users/apply-default-password', auth.requireAdmin, async (req, res) => {
+  try {
+    const result = await googleService.applyDefaultPasswordToNamedUsers();
     res.json(result);
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
