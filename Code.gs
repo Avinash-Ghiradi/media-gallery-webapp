@@ -99,6 +99,10 @@ function doPost(e) {
       res = changeUserPasswordInSheet(contents.username, contents.newPassword);
     } else if (action === 'applyDefaultPasswordToNamedUsers') {
       res = applyDefaultPasswordToNamedUsersInSheet();
+    } else if (action === 'getBrandingFromSheet') {
+      res = getBrandingFromSheet();
+    } else if (action === 'saveBrandingToSheet') {
+      res = saveBrandingToSheet(contents.kind, contents.url);
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -116,6 +120,54 @@ function doPost(e) {
 /**
  * Include HTML file content
  */
+function ensureBrandingSheetExists() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+  var sheet = ss.getSheetByName('branding');
+  if (!sheet) {
+    sheet = ss.insertSheet('branding');
+    sheet.appendRow(['Key', 'Logo URL', 'Updated At']);
+    sheet.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#4f46e5').setFontColor('#ffffff');
+  }
+  return sheet;
+}
+
+function getBrandingFromSheet() {
+  try {
+    var sheet = ensureBrandingSheetExists();
+    var data = sheet.getDataRange().getValues();
+    var appLogoUrl = '';
+    var photoLogoUrl = '';
+    for (var i = 1; i < data.length; i++) {
+      var k = data[i][0] ? data[i][0].toString().trim() : '';
+      var u = data[i][1] ? data[i][1].toString().trim() : '';
+      if (k === 'app_logo' && u) appLogoUrl = u;
+      if (k === 'photo_logo' && u) photoLogoUrl = u;
+    }
+    return { status: 'success', appLogoUrl: appLogoUrl, photoLogoUrl: photoLogoUrl };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
+function saveBrandingToSheet(kind, url) {
+  try {
+    var key = kind === 'photo' ? 'photo_logo' : 'app_logo';
+    var cleanUrl = url ? url.toString().trim() : '';
+    var sheet = ensureBrandingSheetExists();
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim() === key) {
+        sheet.getRange(i + 1, 1, 1, 3).setValues([[key, cleanUrl, new Date()]]);
+        return { status: 'success', key: key, url: cleanUrl };
+      }
+    }
+    sheet.appendRow([key, cleanUrl, new Date()]);
+    return { status: 'success', key: key, url: cleanUrl };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
