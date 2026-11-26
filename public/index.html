@@ -203,8 +203,13 @@
               <i class="fas fa-camera"></i>
               <span>Take Photo &amp; Instant Upload</span>
             </button>
+            <label class="continuous-capture-row">
+              <input type="checkbox" id="continuousCameraToggle" checked>
+              <span>Continuous Auto-Upload (keep snapping while uploading in background)</span>
+            </label>
+            <div id="cameraQueueStatus" class="camera-queue-status" style="display: none;"></div>
             <div class="camera-instant-hint">
-              Opens your camera directly and uploads immediately to Google Drive &amp; Sheets
+              High-quality compressed &amp; uploaded immediately to With/Without Watermark folders
             </div>
             <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleDirectCameraCapture()" style="display: none;">
           </div>
