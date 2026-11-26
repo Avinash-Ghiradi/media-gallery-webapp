@@ -1,7 +1,7 @@
 {
-  "name": "Success School Indi - Media Gallery",
-  "short_name": "Media Gallery",
-  "description": "Digital Media Gallery Uploader for Success School Indi",
+  "name": "Success Gallery",
+  "short_name": "Success Gallery",
+  "description": "Success Gallery — Digital Media Gallery for Success School Indi",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
