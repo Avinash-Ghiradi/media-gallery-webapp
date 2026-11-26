@@ -446,17 +446,29 @@
           </div>
 
           <div class="card" id="appBrandingCard">
-            <div class="card-title"><i class="fas fa-image"></i> App Logo (Success Gallery)</div>
-            <div class="user-photo-picker">
+            <div class="card-title"><i class="fas fa-image"></i> App Logo &amp; Photo Watermark Logo</div>
+            <div class="user-photo-picker" style="margin-bottom: 1rem;">
               <div class="user-photo-preview" id="appLogoAdminPreview" style="border-radius: var(--radius-sm); width: 84px; height: 64px; background: var(--white);">
                 <img id="appLogoAdminImg" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="App Logo" style="object-fit: contain; padding: 4px;">
               </div>
               <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start;">
                 <button type="button" class="btn-primary" id="uploadAppLogoBtn" onclick="document.getElementById('appLogoInput').click()">
-                  <i class="fas fa-upload"></i> Upload New App Logo
+                  <i class="fas fa-upload"></i> Upload App Logo
                 </button>
-                <div class="toggle-description">Updates Header, Login Screen, and Photo/Video Watermarks</div>
+                <div class="toggle-description">Updates Header, Login, Splash Screen &amp; App Icon</div>
                 <input type="file" id="appLogoInput" accept="image/*" onchange="handleAppLogoUpload()" style="display: none;">
+              </div>
+            </div>
+            <div class="user-photo-picker" style="padding-top: 1rem; border-top: 1px solid var(--border-light);">
+              <div class="user-photo-preview" id="photoLogoAdminPreview" style="border-radius: var(--radius-sm); width: 84px; height: 64px; background: var(--white);">
+                <img id="photoLogoAdminImg" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="Photo Watermark Logo" style="object-fit: contain; padding: 4px;">
+              </div>
+              <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start;">
+                <button type="button" class="btn-primary" id="uploadPhotoLogoBtn" onclick="document.getElementById('photoLogoInput').click()">
+                  <i class="fas fa-stamp"></i> Upload Photo Watermark Logo
+                </button>
+                <div class="toggle-description">Updates Photo &amp; Video Watermarks only</div>
+                <input type="file" id="photoLogoInput" accept="image/*" onchange="handlePhotoLogoUpload()" style="display: none;">
               </div>
             </div>
           </div>
