@@ -220,11 +220,14 @@
             <div class="camera-instant-hint">
               High-quality compressed &amp; uploaded immediately to With/Without Watermark folders
             </div>
+            <button type="button" id="toggleDeviceUploadBtn" class="btn-secondary" onclick="toggleDeviceUploadCard()" style="margin-top: 0.85rem; width: auto; padding: 0.55rem 1.15rem; font-size: 0.875rem;">
+              <i class="fas fa-folder-open"></i> Browse Files from Device
+            </button>
             <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleDirectCameraCapture()" style="display: none;">
           </div>
 
-          <!-- Drag & Drop / Gallery Picker Card -->
-          <div class="card">
+          <!-- Drag & Drop / Gallery Picker Card (hidden by default until Browse Files is clicked) -->
+          <div class="card" id="deviceUploadCard" style="display: none;">
             <div class="card-title"><i class="fas fa-photo-video"></i> 2. Or Choose Files from Device</div>
             <div class="file-upload-area" id="dropArea"
                  ondragover="handleDragOver(event)"
