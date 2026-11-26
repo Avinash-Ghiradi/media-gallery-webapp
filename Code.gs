@@ -24,6 +24,8 @@ function doGet(e) {
         res = getFolderLinksFromSheet2();
       } else if (action === 'getFolderLinksForEvent') {
         res = getFolderLinksForEvent(e.parameter.eventName);
+      } else if (action === 'getWithoutWatermarkFolderLinks') {
+        res = getWithoutWatermarkFolderLinks(e.parameter.eventName);
       } else if (action === 'getRecentUploads') {
         res = getRecentUploads();
       } else if (action === 'getAllEventsForDeletion') {
@@ -69,6 +71,8 @@ function doPost(e) {
       res = getFolderLinksFromSheet2();
     } else if (action === 'getFolderLinksForEvent') {
       res = getFolderLinksForEvent(contents.eventName);
+    } else if (action === 'getWithoutWatermarkFolderLinks') {
+      res = getWithoutWatermarkFolderLinks(contents.eventName);
     } else if (action === 'getRecentUploads') {
       res = getRecentUploads();
     } else if (action === 'getAllEventsForDeletion') {
@@ -993,6 +997,60 @@ function getFolderLinksForEvent(eventName) {
   } catch (e) {
     console.error('Error getting folder links for event:', e);
     return { status: 'error', message: 'Error loading folder links: ' + e.message };
+  }
+}
+
+function getWithoutWatermarkFolderLinks(eventName) {
+  try {
+    var rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+    var isAll = !eventName || eventName === 'all';
+
+    if (!isAll) {
+      var eventFolders = rootFolder.getFoldersByName(eventName);
+      if (!eventFolders.hasNext()) return { status: 'success', data: [] };
+      var eventFolder = eventFolders.next();
+      var classFolders = eventFolder.getFolders();
+      var links = [];
+      while (classFolders.hasNext()) {
+        var clsFolder = classFolders.next();
+        var withoutFolders = clsFolder.getFoldersByName('Without Watermark');
+        if (withoutFolders.hasNext()) {
+          links.push({
+            className: clsFolder.getName(),
+            folderUrl: withoutFolders.next().getUrl()
+          });
+        }
+      }
+      links.sort(function(a, b) { return a.className.localeCompare(b.className); });
+      return { status: 'success', data: links };
+    }
+
+    var allEventFolders = rootFolder.getFolders();
+    var results = [];
+    while (allEventFolders.hasNext()) {
+      var evFolder = allEventFolders.next();
+      if (evFolder.getName() === '_UserProfiles') continue;
+      var evClasses = [];
+      var clsIter = evFolder.getFolders();
+      while (clsIter.hasNext()) {
+        var cFolder = clsIter.next();
+        var wmOff = cFolder.getFoldersByName('Without Watermark');
+        if (wmOff.hasNext()) {
+          evClasses.push({
+            className: cFolder.getName(),
+            folderUrl: wmOff.next().getUrl()
+          });
+        }
+      }
+      if (evClasses.length > 0) {
+        evClasses.sort(function(a, b) { return a.className.localeCompare(b.className); });
+        results.push({ eventName: evFolder.getName(), classes: evClasses });
+      }
+    }
+    results.sort(function(a, b) { return a.eventName.localeCompare(b.eventName); });
+    return { status: 'success', data: results };
+  } catch (e) {
+    return { status: 'error', message: 'Error loading Without Watermark folders: ' + e.message };
   }
 }
 
