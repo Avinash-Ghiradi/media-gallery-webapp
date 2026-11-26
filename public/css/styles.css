@@ -654,6 +654,29 @@ input:checked + .slider:before {
   letter-spacing: 0.02em;
 }
 
+.live-cam-pill-btn.ai-on {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.55);
+}
+
+.live-ai-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.68);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+}
+
 .live-cam-icon-btn.flash-on {
   background: #f59e0b;
   color: #111827;
