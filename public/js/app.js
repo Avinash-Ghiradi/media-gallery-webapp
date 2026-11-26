@@ -545,11 +545,19 @@ function applyBrandingLogoUrl(logoUrl) {
   if (!logoUrl) return;
   const loginLogo = document.getElementById('login-school-logo');
   const headerLogo = document.getElementById('school-logo');
+  const splashLogo = document.getElementById('splash-school-logo');
   const adminLogo = document.getElementById('appLogoAdminImg');
   if (loginLogo) loginLogo.src = logoUrl;
   if (headerLogo) headerLogo.src = logoUrl;
+  if (splashLogo) splashLogo.src = logoUrl;
   if (adminLogo) adminLogo.src = logoUrl;
-  preloadSchoolLogo(logoUrl);
+}
+
+function applyPhotoWatermarkLogoUrl(photoLogoUrl) {
+  if (!photoLogoUrl) return;
+  const photoAdminLogo = document.getElementById('photoLogoAdminImg');
+  if (photoAdminLogo) photoAdminLogo.src = photoLogoUrl;
+  preloadSchoolLogo(photoLogoUrl);
 }
 
 async function loadAppBranding() {
@@ -558,14 +566,17 @@ async function loadAppBranding() {
     if (res && res.logoUrl) {
       applyBrandingLogoUrl(res.logoUrl);
     }
+    if (res && (res.photoLogoUrl || res.logoUrl)) {
+      applyPhotoWatermarkLogoUrl(res.photoLogoUrl || res.logoUrl);
+    }
   } catch (e) {
     console.warn('Could not load custom branding:', e.message);
   }
 }
 
-function handleAppLogoUpload() {
-  const input = document.getElementById('appLogoInput');
-  const btn = document.getElementById('uploadAppLogoBtn');
+function uploadLogoToEndpoint(inputId, btnId, maxDim, endpoint, onSuccessUrl) {
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
   if (!input || !input.files || !input.files[0]) return;
 
   const file = input.files[0];
@@ -573,7 +584,6 @@ function handleAppLogoUpload() {
   reader.onload = function(e) {
     const img = new Image();
     img.onload = async function() {
-      const maxDim = 512;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const w = Math.max(1, Math.round(img.width * scale));
       const h = Math.max(1, Math.round(img.height * scale));
@@ -586,10 +596,10 @@ function handleAppLogoUpload() {
       const logoDataUrl = canvas.toDataURL('image/png');
       if (btn) btn.disabled = true;
       try {
-        const res = await apiCall('/api/branding/logo', 'POST', { logoDataUrl });
+        const res = await apiCall(endpoint, 'POST', { logoDataUrl });
         if (res && res.status === 'success') {
-          applyBrandingLogoUrl(res.logoUrl);
-          showCopyNotification(res.message || 'App logo updated!');
+          onSuccessUrl(res);
+          showCopyNotification(res.message || 'Logo updated!');
         } else {
           showNoticePopup((res && res.message) || 'Failed to upload logo', '', 'Error');
         }
@@ -603,6 +613,18 @@ function handleAppLogoUpload() {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+function handleAppLogoUpload() {
+  uploadLogoToEndpoint('appLogoInput', 'uploadAppLogoBtn', 512, '/api/branding/logo', (res) => {
+    applyBrandingLogoUrl(res.logoUrl);
+  });
+}
+
+function handlePhotoLogoUpload() {
+  uploadLogoToEndpoint('photoLogoInput', 'uploadPhotoLogoBtn', 800, '/api/branding/photo-logo', (res) => {
+    applyPhotoWatermarkLogoUrl(res.photoLogoUrl);
+  });
 }
 
 function handleClassSelectChange() {
