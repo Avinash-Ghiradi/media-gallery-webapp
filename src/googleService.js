@@ -429,6 +429,8 @@ async function runWithConcurrency(tasks, limit = 6) {
 
 let cachedEventFolders = null;
 let cachedEventFoldersAt = 0;
+let cachedManageEvents = null;
+let cachedManageEventsAt = 0;
 let liveFolderSyncInFlight = false;
 
 const IGNORED_SYSTEM_FOLDERS = new Set(['_UserProfiles', '_AppBranding']);
@@ -439,9 +441,11 @@ function refreshLiveFoldersInBackground() {
   callGasBridge('getAllEventsForDeletion')
     .then((liveRes) => {
       if (liveRes && Array.isArray(liveRes.data)) {
-        cachedEventFolders = liveRes.data
-          .map((ev) => ev && ev.name)
-          .filter((name) => name && !IGNORED_SYSTEM_FOLDERS.has(name))
+        const filteredEvents = liveRes.data.filter((ev) => ev && ev.name && !IGNORED_SYSTEM_FOLDERS.has(ev.name));
+        cachedManageEvents = { status: 'success', data: filteredEvents };
+        cachedManageEventsAt = Date.now();
+        cachedEventFolders = filteredEvents
+          .map((ev) => ev.name)
           .sort();
         cachedEventFoldersAt = Date.now();
       }
@@ -835,11 +839,19 @@ async function getRecentUploads() {
 }
 
 async function getAllEventsForDeletion() {
+  if (cachedManageEvents && (Date.now() - cachedManageEventsAt) < 120000) {
+    return cachedManageEvents;
+  }
+
   if (config.gasWebAppUrl) {
     try {
       const res = await callGasBridge('getAllEventsForDeletion');
-      if (res && res.status === 'success') return res;
-      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+      if (res && Array.isArray(res.data)) {
+        const filtered = res.data.filter((ev) => ev && ev.name && !IGNORED_SYSTEM_FOLDERS.has(ev.name));
+        cachedManageEvents = { status: 'success', data: filtered };
+        cachedManageEventsAt = Date.now();
+        return cachedManageEvents;
+      }
     } catch (e) {
       console.error('GAS getAllEventsForDeletion error:', e.message);
     }
