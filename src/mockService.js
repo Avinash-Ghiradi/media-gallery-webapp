@@ -154,9 +154,13 @@ function uploadFilesToDrive(filesData, eventName, className, addWatermark = true
 
   return {
     status: 'success',
-    message: `${filesData.length} file(s) processed ${addWatermark ? 'WITH watermark' : 'WITHOUT watermark'} (Mock Mode)`,
+    message: addWatermark
+      ? `${filesData.length} file(s) saved to both "With Watermark" (WhatsApp) and "Without Watermark" folders (Mock Mode)`
+      : `${filesData.length} file(s) saved to "Without Watermark" folder (Mock Mode)`,
     urls: fileUrls,
     folderUrl: folderUrl,
+    withWatermarkFolderUrl: addWatermark ? folderUrl : '',
+    withoutWatermarkFolderUrl: folderUrl,
     watermarkApplied: addWatermark
   };
 }
