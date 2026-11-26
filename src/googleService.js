@@ -1250,7 +1250,10 @@ async function getUsersListForAdmin() {
   if (config.gasWebAppUrl) {
     try {
       const res = await callGasBridge('getUsersListForAdmin');
-      if (res && res.status === 'success') return res;
+      if (res && res.status === 'success') {
+        const filtered = (res.data || []).filter((u) => u && u.username && !u.username.startsWith('__BRANDING_'));
+        return { ...res, data: filtered };
+      }
     } catch (e) {
       console.error('GAS getUsersListForAdmin error:', e.message);
     }
@@ -1271,7 +1274,7 @@ async function getUsersListForAdmin() {
     const list = [];
     for (let i = startRow; i < rows.length; i++) {
       const row = rows[i];
-      if (row[0] && row[1]) {
+      if (row[0] && row[1] && !row[0].toString().trim().startsWith('__BRANDING_')) {
         list.push({
           username: row[0].toString().trim(),
           password: row[1].toString().trim(),
@@ -1472,12 +1475,58 @@ async function applyDefaultPasswordToNamedUsers() {
 }
 
 const APP_BRANDING_LOGO_NAME = 'app_branding_logo.png';
+const PHOTO_BRANDING_LOGO_NAME = 'photo_watermark_logo.png';
 
-async function saveAppLogoToDrive(buffer) {
+function extractDriveDirectImageUrl(url) {
+  if (!url) return '';
+  const match = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) {
+    return `https://lh3.googleusercontent.com/d/${match[1]}`;
+  }
+  return String(url);
+}
+
+async function saveAppLogoToDrive(buffer, kind = 'app') {
+  if (!buffer) return null;
+  const filename = kind === 'photo' ? PHOTO_BRANDING_LOGO_NAME : APP_BRANDING_LOGO_NAME;
+  const sheetKey = kind === 'photo' ? '__BRANDING_PHOTO_LOGO__' : '__BRANDING_APP_LOGO__';
+
+  if (config.gasWebAppUrl) {
+    try {
+      const gasRes = await callGasBridge('uploadFilesToDrive', {
+        filesData: [{
+          filename,
+          contentType: 'image/png',
+          size: buffer.length,
+          data: buffer.toString('base64')
+        }],
+        originalFilesData: [],
+        eventName: '_AppBranding',
+        className: 'Logos',
+        addWatermark: false
+      });
+      const rawUrl = gasRes && Array.isArray(gasRes.urls) && gasRes.urls[0] && gasRes.urls[0].url;
+      const directUrl = extractDriveDirectImageUrl(rawUrl);
+      if (directUrl) {
+        await addOrUpdateUser({
+          username: sheetKey,
+          password: `disabled_${Date.now()}`,
+          assignedClass: '',
+          details: 'System Branding Config',
+          photoUrl: directUrl,
+          fullName: sheetKey
+        });
+        return directUrl;
+      }
+    } catch (gasErr) {
+      console.warn(`Could not persist ${kind} logo via GAS:`, gasErr.message);
+    }
+  }
+
   const drive = getDriveClient();
-  if (!drive || !config.driveRootFolderId || !buffer) return null;
+  if (!drive || !config.driveRootFolderId) return null;
   try {
-    const query = `name = '${APP_BRANDING_LOGO_NAME}' and '${config.driveRootFolderId}' in parents and trashed = false`;
+    const query = `name = '${filename}' and '${config.driveRootFolderId}' in parents and trashed = false`;
     const listRes = await drive.files.list({
       q: query,
       supportsAllDrives: true,
@@ -1499,7 +1548,7 @@ async function saveAppLogoToDrive(buffer) {
 
     const created = await drive.files.create({
       requestBody: {
-        name: APP_BRANDING_LOGO_NAME,
+        name: filename,
         parents: [config.driveRootFolderId]
       },
       media: { mimeType: 'image/png', body: bufferStream },
@@ -1508,16 +1557,36 @@ async function saveAppLogoToDrive(buffer) {
     });
     return created.data.id;
   } catch (err) {
-    console.warn('Could not persist app logo to Google Drive:', err.message);
+    console.warn(`Could not persist ${kind} logo to Google Drive:`, err.message);
     return null;
   }
 }
 
-async function loadAppLogoFromDrive() {
+async function loadAppLogoFromDrive(kind = 'app') {
+  const filename = kind === 'photo' ? PHOTO_BRANDING_LOGO_NAME : APP_BRANDING_LOGO_NAME;
+  const sheetKey = kind === 'photo' ? '__BRANDING_PHOTO_LOGO__' : '__BRANDING_APP_LOGO__';
+
+  try {
+    const users = await getUsersFromSheet();
+    const entry = users && users[sheetKey];
+    const url = entry && typeof entry === 'object' ? entry.photoUrl : '';
+    if (url) {
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const arrBuf = await resp.arrayBuffer();
+        if (arrBuf && arrBuf.byteLength > 0) {
+          return Buffer.from(arrBuf);
+        }
+      }
+    }
+  } catch (sheetErr) {
+    console.warn(`Could not load persisted ${kind} logo from Sheet URL:`, sheetErr.message);
+  }
+
   const drive = getDriveClient();
   if (!drive || !config.driveRootFolderId) return null;
   try {
-    const query = `name = '${APP_BRANDING_LOGO_NAME}' and '${config.driveRootFolderId}' in parents and trashed = false`;
+    const query = `name = '${filename}' and '${config.driveRootFolderId}' in parents and trashed = false`;
     const listRes = await drive.files.list({
       q: query,
       supportsAllDrives: true,
@@ -1532,7 +1601,7 @@ async function loadAppLogoFromDrive() {
     );
     return Buffer.from(fileRes.data);
   } catch (err) {
-    console.warn('Could not load persisted app logo from Google Drive:', err.message);
+    console.warn(`Could not load persisted ${kind} logo from Google Drive:`, err.message);
     return null;
   }
 }
