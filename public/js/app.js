@@ -1418,6 +1418,13 @@ window.addEventListener('online', () => {
 
 window.addEventListener('load', () => {
   setTimeout(() => processInstantCameraQueue(), 1200);
+  const splash = document.getElementById('appSplashOverlay');
+  if (splash) {
+    setTimeout(() => {
+      splash.classList.add('fade-out');
+      setTimeout(() => { splash.style.display = 'none'; }, 500);
+    }, 900);
+  }
 });
 
 // Open in-app continuous camera viewfinder (falls back to native file input if unavailable)
