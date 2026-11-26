@@ -2604,7 +2604,11 @@ function showDeleteEventConfirmation(eventName, eventIndex) {
     </ul>
     <strong>Are you absolutely sure you want to proceed?</strong>
   `;
-  document.getElementById('confirmDeleteBtn').innerHTML = '<i class="fas fa-trash-alt"></i> Delete Entire Event';
+  const confirmBtn = document.getElementById('confirmDeleteBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Delete Entire Event';
+  }
   modal.style.display = 'flex';
 }
 
@@ -2616,12 +2620,18 @@ function showDeleteClassConfirmation(eventName, className, eventIndex, classInde
     <strong>⚠️ WARNING: This action cannot be undone!</strong><br><br>
     You are about to delete class folder <strong>"${className}"</strong> from event <strong>"${eventName}"</strong>.
   `;
-  document.getElementById('confirmDeleteBtn').innerHTML = '<i class="fas fa-trash-alt"></i> Delete Class Folder';
+  const confirmBtn = document.getElementById('confirmDeleteBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Delete Class Folder';
+  }
   modal.style.display = 'flex';
 }
 
 function cancelDeletion() {
   document.getElementById('confirmationModal').style.display = 'none';
+  const confirmBtn = document.getElementById('confirmDeleteBtn');
+  if (confirmBtn) confirmBtn.disabled = false;
   currentDeletion = { type: '', eventName: '', className: '', eventIndex: -1, classIndex: -1 };
 }
 
@@ -2658,6 +2668,10 @@ async function deleteEvent() {
   } catch (error) {
     document.getElementById('confirmationModal').style.display = 'none';
     showStatus('Deletion Error: ' + error.message, 'error');
+  } finally {
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmBtn) confirmBtn.disabled = false;
+    currentDeletion = { type: '', eventName: '', className: '', eventIndex: -1, classIndex: -1 };
   }
 }
 
@@ -2680,6 +2694,10 @@ async function deleteClass() {
   } catch (error) {
     document.getElementById('confirmationModal').style.display = 'none';
     showStatus('Deletion Error: ' + error.message, 'error');
+  } finally {
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmBtn) confirmBtn.disabled = false;
+    currentDeletion = { type: '', eventName: '', className: '', eventIndex: -1, classIndex: -1 };
   }
 }
 
