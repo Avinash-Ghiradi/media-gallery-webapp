@@ -1486,6 +1486,39 @@ function extractDriveDirectImageUrl(url) {
   return String(url);
 }
 
+async function saveBrandingUrlToSheet(kind = 'app', directUrl = '') {
+  if (!directUrl) return null;
+  const sheetKey = kind === 'photo' ? '__BRANDING_PHOTO_LOGO__' : '__BRANDING_APP_LOGO__';
+  try {
+    await addOrUpdateUser({
+      username: sheetKey,
+      password: `disabled_${Date.now()}`,
+      assignedClass: '',
+      details: 'System Branding Config',
+      photoUrl: directUrl,
+      fullName: sheetKey
+    });
+    return directUrl;
+  } catch (err) {
+    console.warn(`Could not save ${kind} logo URL to Sheet:`, err.message);
+    return null;
+  }
+}
+
+async function getPersistedBrandingUrls() {
+  try {
+    const users = await getUsersFromSheet();
+    const appEntry = users && users['__BRANDING_APP_LOGO__'];
+    const photoEntry = users && users['__BRANDING_PHOTO_LOGO__'];
+    return {
+      appLogoUrl: (appEntry && typeof appEntry === 'object' ? appEntry.photoUrl : '') || '',
+      photoLogoUrl: (photoEntry && typeof photoEntry === 'object' ? photoEntry.photoUrl : '') || ''
+    };
+  } catch (e) {
+    return { appLogoUrl: '', photoLogoUrl: '' };
+  }
+}
+
 async function saveAppLogoToDrive(buffer, kind = 'app') {
   if (!buffer) return null;
   const filename = kind === 'photo' ? PHOTO_BRANDING_LOGO_NAME : APP_BRANDING_LOGO_NAME;
@@ -1632,5 +1665,7 @@ module.exports = {
   getClassesForWhatsApp,
   getFolderInfoForWhatsApp,
   saveAppLogoToDrive,
-  loadAppLogoFromDrive
+  loadAppLogoFromDrive,
+  saveBrandingUrlToSheet,
+  getPersistedBrandingUrls
 };
