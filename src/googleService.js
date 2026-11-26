@@ -247,35 +247,96 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     }
   }
 
+const knownCreatedFolders = new Set();
+
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function runWithConcurrency(tasks, limit = 6) {
+  const results = new Array(tasks.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (idx < tasks.length) {
+      const current = idx++;
+      results[current] = await tasks[current]();
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
   if (config.gasWebAppUrl) {
     try {
       console.log('Forwarding upload to Google Apps Script Web App URL:', config.gasWebAppUrl);
-      if (addWatermark && originalsList.length > 0) {
-        // Run sequentially so folder creation in Call 1 completes before Call 2 reuses the exact same folders
-        const wmRes = await callGasBridge('uploadFilesToDrive', {
-          filesData: filesData,
-          originalFilesData: [],
-          eventName: eventName,
-          className: className,
-          addWatermark: true
-        });
-        await callGasBridge('uploadFilesToDrive', {
-          filesData: originalsList,
-          originalFilesData: [],
-          eventName: eventName,
-          className: className,
-          addWatermark: false
-        });
-        if (wmRes) return wmRes;
-      } else {
-        const res = await callGasBridge('uploadFilesToDrive', {
-          filesData: filesData,
+      const folderKey = `${eventName}::${className}`;
+      const CHUNK_SIZE = 4;
+      let firstWmRes = null;
+      let remainingFiles = filesData;
+
+      // Ensure event/class/watermark folders exist once before fanning out parallel chunks
+      if (!knownCreatedFolders.has(folderKey) && filesData.length > 0) {
+        firstWmRes = await callGasBridge('uploadFilesToDrive', {
+          filesData: [filesData[0]],
           originalFilesData: [],
           eventName: eventName,
           className: className,
           addWatermark: addWatermark
         });
-        if (res) return res;
+        if (firstWmRes && firstWmRes.status === 'success') {
+          knownCreatedFolders.add(folderKey);
+          remainingFiles = filesData.slice(1);
+        } else if (firstWmRes) {
+          return firstWmRes;
+        }
+      }
+
+      const wmChunks = chunkArray(remainingFiles, CHUNK_SIZE);
+      const origChunks = (addWatermark && originalsList.length > 0)
+        ? chunkArray(originalsList, CHUNK_SIZE)
+        : [];
+
+      const tasks = [
+        ...wmChunks.map((chunk) => () =>
+          callGasBridge('uploadFilesToDrive', {
+            filesData: chunk,
+            originalFilesData: [],
+            eventName: eventName,
+            className: className,
+            addWatermark: addWatermark
+          })
+        ),
+        ...origChunks.map((chunk) => () =>
+          callGasBridge('uploadFilesToDrive', {
+            filesData: chunk,
+            originalFilesData: [],
+            eventName: eventName,
+            className: className,
+            addWatermark: false
+          })
+        )
+      ];
+
+      const parallelResults = tasks.length > 0 ? await runWithConcurrency(tasks, 6) : [];
+      const wmResults = [
+        ...(firstWmRes ? [firstWmRes] : []),
+        ...parallelResults.slice(0, wmChunks.length)
+      ].filter(Boolean);
+
+      const primaryRes = wmResults.find((r) => r && r.status === 'success') || firstWmRes || parallelResults[0];
+      if (primaryRes) {
+        const mergedUrls = wmResults.flatMap((r) => (Array.isArray(r.urls) ? r.urls : []));
+        return {
+          ...primaryRes,
+          urls: mergedUrls.length > 0 ? mergedUrls : (primaryRes.urls || []),
+          message: addWatermark
+            ? `${filesData.length} file(s) saved to both "With Watermark" (WhatsApp) and "Without Watermark" folders`
+            : `${filesData.length} file(s) saved to "Without Watermark" folder`
+        };
       }
     } catch (e) {
       console.error('Error forwarding to GAS WebApp URL:', e.message);
