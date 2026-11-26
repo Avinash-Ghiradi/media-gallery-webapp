@@ -136,9 +136,27 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function requireAdmin(req, res, next) {
+  const auth = checkAuthStatus(req);
+  if (!auth.isAuthenticated) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Authentication required. Please login again.'
+    });
+  }
+  if (auth.assignedClass) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Admin access required.'
+    });
+  }
+  next();
+}
+
 module.exports = {
   checkAuthStatus,
   authenticateUser,
   logoutUser,
-  requireAuth
+  requireAuth,
+  requireAdmin
 };
