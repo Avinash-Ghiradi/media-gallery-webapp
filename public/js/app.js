@@ -1304,16 +1304,126 @@ function getSelectedEventAndClass() {
   return { eventName, className };
 }
 
-// Open device camera directly for instant photo capture & upload
-function triggerDirectCamera() {
+let liveCameraStream = null;
+let liveCameraFacing = 'environment';
+let liveCameraSelection = null;
+
+// Open in-app continuous camera viewfinder (falls back to native file input if unavailable)
+async function triggerDirectCamera() {
   const selection = getSelectedEventAndClass();
   if (!selection) return;
+
+  liveCameraSelection = selection;
+  const continuousToggle = document.getElementById('continuousCameraToggle');
+  const useLiveCamera = (!continuousToggle || continuousToggle.checked) &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === 'function';
+
+  if (useLiveCamera) {
+    const opened = await openLiveCamera(selection);
+    if (opened) return;
+  }
 
   const cameraInput = document.getElementById('cameraInput');
   if (cameraInput) {
     cameraInput.value = '';
     cameraInput.click();
   }
+}
+
+async function openLiveCamera(selection) {
+  const modal = document.getElementById('liveCameraModal');
+  const video = document.getElementById('liveCameraVideo');
+  const destLabel = document.getElementById('liveCameraDestLabel');
+  if (!modal || !video) return false;
+
+  if (destLabel && selection) {
+    destLabel.textContent = `${selection.eventName} > ${selection.className}`;
+  }
+  updateCameraQueueUI();
+
+  try {
+    stopLiveCameraStream();
+    liveCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: liveCameraFacing },
+        width: { ideal: 2560 },
+        height: { ideal: 1920 }
+      },
+      audio: false
+    });
+    video.srcObject = liveCameraStream;
+    await video.play();
+    modal.style.display = 'flex';
+    return true;
+  } catch (err) {
+    console.warn('Live camera unavailable, falling back to system camera:', err.message);
+    return false;
+  }
+}
+
+function stopLiveCameraStream() {
+  if (liveCameraStream) {
+    liveCameraStream.getTracks().forEach((t) => t.stop());
+    liveCameraStream = null;
+  }
+  const video = document.getElementById('liveCameraVideo');
+  if (video) video.srcObject = null;
+}
+
+function closeLiveCamera() {
+  stopLiveCameraStream();
+  const modal = document.getElementById('liveCameraModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function switchLiveCameraFacing() {
+  liveCameraFacing = liveCameraFacing === 'environment' ? 'user' : 'environment';
+  if (liveCameraSelection) {
+    await openLiveCamera(liveCameraSelection);
+  }
+}
+
+function captureLiveCameraPhoto() {
+  const video = document.getElementById('liveCameraVideo');
+  const flash = document.getElementById('liveCameraFlash');
+  if (!video || !video.videoWidth || !video.videoHeight || !liveCameraSelection) return;
+
+  if (flash) {
+    flash.classList.add('active');
+    setTimeout(() => flash.classList.remove('active'), 140);
+  }
+
+  const maxDim = 2560;
+  const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+  const w = Math.max(1, Math.round(video.videoWidth * scale));
+  const h = Math.max(1, Math.round(video.videoHeight * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(video, 0, 0, w, h);
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const uniqueSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const capturedFile = new File([blob], `photo_${timestamp}_${uniqueSuffix}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now()
+    });
+
+    instantCameraQueue.push({
+      file: capturedFile,
+      eventName: liveCameraSelection.eventName,
+      className: liveCameraSelection.className
+    });
+    updateCameraQueueUI();
+    processInstantCameraQueue();
+  }, 'image/jpeg', 0.88);
 }
 
 let instantCameraQueue = [];
@@ -1323,17 +1433,23 @@ let instantFailedCount = 0;
 
 function updateCameraQueueUI() {
   const box = document.getElementById('cameraQueueStatus');
-  if (!box) return;
+  const liveText = document.getElementById('liveCameraQueueText');
   const pending = instantCameraQueue.length + instantUploadingCount;
+  const parts = [];
+  if (pending > 0) parts.push(`<i class="fas fa-spinner fa-spin"></i> Uploading ${pending} photo(s)...`);
+  if (instantCompletedCount > 0) parts.push(`<span style="color: var(--success);">✅ ${instantCompletedCount} uploaded</span>`);
+  if (instantFailedCount > 0) parts.push(`<span style="color: var(--error);">⚠️ ${instantFailedCount} failed</span>`);
+
+  if (liveText) {
+    liveText.innerHTML = parts.length > 0 ? parts.join(' • ') : 'Ready to capture';
+  }
+
+  if (!box) return;
   if (pending === 0 && instantCompletedCount === 0 && instantFailedCount === 0) {
     box.style.display = 'none';
     return;
   }
   box.style.display = 'block';
-  const parts = [];
-  if (pending > 0) parts.push(`<i class="fas fa-spinner fa-spin"></i> Uploading ${pending} photo(s)...`);
-  if (instantCompletedCount > 0) parts.push(`<span style="color: var(--success);">✅ ${instantCompletedCount} uploaded</span>`);
-  if (instantFailedCount > 0) parts.push(`<span style="color: var(--error);">⚠️ ${instantFailedCount} failed</span>`);
   box.innerHTML = parts.join(' &nbsp;•&nbsp; ');
 }
 
