@@ -131,6 +131,8 @@ function switchTab(tabName) {
     initializeWhatsAppTab();
   } else if (tabName === 'delete') {
     loadEventsForDeletion();
+  } else if (tabName === 'users') {
+    loadUsersForAdmin();
   }
 }
 
@@ -198,6 +200,10 @@ function showMainApp(username, googleConfigured, assignedClass = '') {
   document.getElementById('user-name').textContent = 'Welcome, ' + (username || 'Admin') + classNote;
   document.getElementById('mainApp').style.display = 'block';
   document.getElementById('loginOverlay').style.display = 'none';
+  const usersNavBtn = document.getElementById('usersNavBtn');
+  if (usersNavBtn) {
+    usersNavBtn.style.display = currentUserAssignedClass ? 'none' : 'inline-flex';
+  }
   applyAssignedClassLock();
   loadEvents();
   initializeFolderView();
@@ -1832,4 +1838,110 @@ function copyWhatsAppMessage() {
 function openWhatsApp() {
   if (!currentWhatsAppData) return showStatus('Please select a folder first', 'error');
   window.open(currentWhatsAppData.whatsappLink, '_blank', 'noopener,noreferrer');
+}
+
+/* ==========================================================================
+   ADMIN USER MANAGEMENT
+   ========================================================================== */
+
+async function loadUsersForAdmin() {
+  const container = document.getElementById('usersListContainer');
+  if (!container) return;
+
+  container.innerHTML = `<div class="loading-recent"><div class="spinner"></div><p>Loading users from Google Sheet...</p></div>`;
+
+  try {
+    const res = await apiCall('/api/users');
+    if (res && res.status === 'success') {
+      const users = res.data || [];
+      if (users.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No users found in sheet.</p></div>';
+        return;
+      }
+
+      let html = '<div class="users-list">';
+      users.forEach((u) => {
+        const badgeText = u.assignedClass ? `Class: ${u.assignedClass}` : 'Admin (All Classes)';
+        const safeUser = u.username.replace(/'/g, "\\'");
+        html += `
+          <div class="user-row-card">
+            <div class="user-row-info">
+              <div class="user-row-name">
+                <span>${u.username}</span>
+                <span class="assigned-class-badge">${badgeText}</span>
+              </div>
+              <div class="user-row-meta">
+                Password: <strong>${u.password}</strong>${u.details ? ` • ${u.details}` : ''}
+              </div>
+            </div>
+            <button type="button" class="delete-class-btn" onclick="deleteUserFromAdmin('${safeUser}')">
+              <i class="fas fa-trash-alt"></i> Remove
+            </button>
+          </div>
+        `;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    } else {
+      container.innerHTML = `<div class="empty-state"><p>${(res && res.message) || 'Failed to load users'}</p></div>`;
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state"><p>Error: ${err.message}</p></div>`;
+  }
+}
+
+async function saveUserFromAdmin() {
+  const usernameEl = document.getElementById('newUserUsername');
+  const passwordEl = document.getElementById('newUserPassword');
+  const classEl = document.getElementById('newUserClass');
+  const detailsEl = document.getElementById('newUserDetails');
+  const saveBtn = document.getElementById('saveUserBtn');
+
+  const username = usernameEl ? usernameEl.value.trim() : '';
+  const password = passwordEl ? passwordEl.value.trim() : '';
+  const assignedClass = classEl ? classEl.value.trim() : '';
+  const details = detailsEl ? detailsEl.value.trim() : '';
+
+  if (!username) {
+    showNoticePopup('Please enter a username', 'newUserUsername');
+    return;
+  }
+  if (!password) {
+    showNoticePopup('Please enter a password', 'newUserPassword');
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const res = await apiCall('/api/users', 'POST', { username, password, assignedClass, details });
+    if (res && res.status === 'success') {
+      showCopyNotification(res.message || 'User saved!');
+      if (usernameEl) usernameEl.value = '';
+      if (passwordEl) passwordEl.value = '';
+      if (classEl) classEl.value = '';
+      if (detailsEl) detailsEl.value = '';
+      loadUsersForAdmin();
+    } else {
+      showNoticePopup((res && res.message) || 'Failed to save user', '', 'Error');
+    }
+  } catch (err) {
+    showNoticePopup('Error saving user: ' + err.message, '', 'Error');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function deleteUserFromAdmin(username) {
+  if (!confirm(`Remove user "${username}" from Google Sheet?`)) return;
+  try {
+    const res = await apiCall(`/api/users/${encodeURIComponent(username)}`, 'DELETE');
+    if (res && res.status === 'success') {
+      showCopyNotification(res.message || 'User removed');
+      loadUsersForAdmin();
+    } else {
+      showNoticePopup((res && res.message) || 'Failed to remove user', '', 'Error');
+    }
+  } catch (err) {
+    showNoticePopup('Error removing user: ' + err.message, '', 'Error');
+  }
 }
