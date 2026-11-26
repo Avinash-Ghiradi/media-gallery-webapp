@@ -80,11 +80,19 @@ app.get('/manifest.json', async (req, res) => {
   });
 });
 
-// Restore custom logo from Google Drive if requested directly on a fresh container
+// Restore custom logos from persistent storage if requested directly on a fresh container
 app.get('/custom-logo.png', async (req, res, next) => {
   await ensurePersistentAppLogoLoaded();
   if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
     return res.sendFile(CUSTOM_PUBLIC_LOGO);
+  }
+  next();
+});
+
+app.get('/custom-photo-logo.png', async (req, res, next) => {
+  await ensurePersistentAppLogoLoaded();
+  if (fs.existsSync(CUSTOM_PHOTO_LOGO)) {
+    return res.sendFile(CUSTOM_PHOTO_LOGO);
   }
   next();
 });
@@ -485,16 +493,24 @@ const SERVER_WATERMARK_LOGO = path.join(__dirname, 'src', 'school_logo.png');
 let logoRestorePromise = null;
 
 async function ensurePersistentAppLogoLoaded() {
-  if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) return true;
+  if (fs.existsSync(CUSTOM_PUBLIC_LOGO) && fs.existsSync(CUSTOM_PHOTO_LOGO)) return true;
   if (!logoRestorePromise) {
     logoRestorePromise = (async () => {
       try {
-        const buf = await googleService.loadAppLogoFromDrive();
-        if (buf && buf.length > 0) {
-          fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
-          await regeneratePwaIconsFromBuffer(buf);
-          return true;
+        const [appBuf, photoBuf] = await Promise.all([
+          fs.existsSync(CUSTOM_PUBLIC_LOGO) ? Promise.resolve(null) : googleService.loadAppLogoFromDrive('app'),
+          fs.existsSync(CUSTOM_PHOTO_LOGO) ? Promise.resolve(null) : googleService.loadAppLogoFromDrive('photo')
+        ]);
+        if (appBuf && appBuf.length > 0) {
+          fs.writeFileSync(CUSTOM_PUBLIC_LOGO, appBuf);
+          await regeneratePwaIconsFromBuffer(appBuf);
         }
+        if (photoBuf && photoBuf.length > 0) {
+          fs.writeFileSync(CUSTOM_PHOTO_LOGO, photoBuf);
+          fs.writeFileSync(SERVER_WATERMARK_LOGO, photoBuf);
+          videoWatermark.reloadLogo();
+        }
+        return true;
       } catch (e) {
         console.warn('Logo restore skipped:', e.message);
       }
@@ -563,7 +579,7 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
     const buf = Buffer.from(base64, 'base64');
     fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
     await regeneratePwaIconsFromBuffer(buf);
-    await googleService.saveAppLogoToDrive(buf);
+    await googleService.saveAppLogoToDrive(buf, 'app');
     logoRestorePromise = Promise.resolve(true);
 
     const logoUrl = `/custom-logo.png?v=${Date.now()}`;
@@ -591,6 +607,8 @@ app.post('/api/branding/photo-logo', auth.requireAdmin, async (req, res) => {
     fs.writeFileSync(CUSTOM_PHOTO_LOGO, buf);
     fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
     videoWatermark.reloadLogo();
+    await googleService.saveAppLogoToDrive(buf, 'photo');
+    logoRestorePromise = Promise.resolve(true);
 
     const photoLogoUrl = `/custom-photo-logo.png?v=${Date.now()}`;
     res.json({
