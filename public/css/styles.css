@@ -131,6 +131,29 @@ body {
   backdrop-filter: blur(5px);
 }
 
+.install-app-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: var(--white);
+  color: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, background-color 0.2s ease;
+  width: auto;
+  min-height: 36px;
+}
+
+.install-app-btn:hover {
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
 .user-avatar {
   width: 2.5rem;
   height: 2.5rem;
