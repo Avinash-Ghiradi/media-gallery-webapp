@@ -35,6 +35,7 @@ app.use(express.urlencoded({ limit: '500mb', extended: true }));
 app.use(session({
   secret: config.sessionSecret,
   resave: true,
+  rolling: true,
   saveUninitialized: false,
   cookie: {
     maxAge: config.sessionTimeoutMs,
@@ -98,6 +99,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
   const result = await auth.authenticateUser(req, password, username);
   if (result.status === 'success') {
+    auth.setSignedSessionCookie(res, req.session.user);
     return req.session.save((err) => {
       if (err) console.error('Session save error:', err);
       res.json(result);
@@ -108,6 +110,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/logout', async (req, res) => {
   const result = await auth.logoutUser(req);
+  auth.clearSignedSessionCookie(res);
   res.json(result);
 });
 
@@ -124,6 +127,7 @@ app.post('/api/auth/change-password', auth.requireAuth, async (req, res) => {
     const result = await googleService.changeUserPassword(req.session.user.username, cleanNew);
     if (result && result.status === 'success') {
       req.session.user.mustChangePassword = false;
+      auth.setSignedSessionCookie(res, req.session.user);
       return req.session.save(() => res.json(result));
     }
     res.json(result);
@@ -186,6 +190,7 @@ app.post('/api/auth/profile', auth.requireAuth, async (req, res) => {
         req.session.user.photoUrl = updated.photoUrl;
       }
 
+      auth.setSignedSessionCookie(res, req.session.user);
       return req.session.save(() => {
         res.json({
           status: 'success',
