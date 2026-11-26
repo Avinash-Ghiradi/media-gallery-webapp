@@ -4,7 +4,10 @@
   <base href="/">
   <title>Media Gallery Uploader</title>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="/css/styles.css">
@@ -154,7 +157,21 @@
         </div>
         
         <div class="form-group">
-          <label>Upload Media Files</label>
+          <label>Quick Camera Capture</label>
+          <div class="camera-instant-box">
+            <button type="button" class="camera-instant-btn" id="takePhotoBtn" onclick="triggerDirectCamera()">
+              <i class="fas fa-camera"></i>
+              <span>Take Photo &amp; Instant Upload</span>
+            </button>
+            <div class="camera-instant-hint">
+              Opens your camera directly and immediately uploads the photo to Google Drive &amp; Sheets
+            </div>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleDirectCameraCapture()" style="display: none;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Or Select Existing Media Files</label>
           <div class="file-upload-area" id="dropArea" 
                ondragover="handleDragOver(event)" 
                ondragleave="handleDragLeave(event)" 
