@@ -598,7 +598,7 @@ function getAllExistingFolders() {
   try {
     var folderNames = [];
 
-    // 1. Scan Google Drive root folder
+    // 1. Scan Google Drive root folder only (avoid returning deleted events from old Sheet rows)
     try {
       var rootFolderId = DRIVE_ROOT_FOLDER_ID;
       var rootFolder = DriveApp.getFolderById(rootFolderId);
@@ -606,34 +606,12 @@ function getAllExistingFolders() {
       while (folders.hasNext()) {
         var folder = folders.next();
         var name = folder.getName();
-        if (folderNames.indexOf(name) === -1) {
+        if (name !== '_UserProfiles' && folderNames.indexOf(name) === -1) {
           folderNames.push(name);
         }
       }
     } catch(dErr) {
       console.error('Drive root folder scan error:', dErr);
-    }
-
-    // 2. Scan Sheet1, Sheet2, and data tabs in Spreadsheet
-    try {
-      var spreadsheet = SpreadsheetApp.openById(LOG_SHEET_ID);
-      var sheetNames = ['Sheet1', 'Sheet2', 'data'];
-      sheetNames.forEach(function(sName) {
-        var sheet = spreadsheet.getSheetByName(sName);
-        if (sheet && sheet.getLastRow() > 1) {
-          var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
-          data.forEach(function(row) {
-            if (row[0] && row[0].toString().trim() !== '' && row[0].toString().trim().toLowerCase() !== 'name' && row[0].toString().trim().toLowerCase() !== 'event name') {
-              var eventName = row[0].toString().trim();
-              if (folderNames.indexOf(eventName) === -1) {
-                folderNames.push(eventName);
-              }
-            }
-          });
-        }
-      });
-    } catch(sErr) {
-      console.error('Sheet scan error:', sErr);
     }
 
     return folderNames.sort();
