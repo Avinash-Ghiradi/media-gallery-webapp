@@ -88,7 +88,7 @@
           <span>Install App</span>
         </button>
         <div class="user-info">
-          <div class="user-avatar">
+          <div class="user-avatar" id="headerUserAvatar">
             <i class="fas fa-user-shield"></i>
           </div>
           <div class="user-meta">
@@ -422,8 +422,22 @@
             <p class="page-subtitle">Add teachers &amp; admins and assign their auto-selected class folder in Google Sheet</p>
           </div>
 
-          <div class="card">
-            <div class="card-title"><i class="fas fa-user-plus"></i> Add or Update User</div>
+          <div class="card" id="userEditorCard">
+            <div class="card-title"><i class="fas fa-user-plus"></i> <span id="userFormTitle">Add or Update User</span></div>
+            <div class="user-photo-picker">
+              <div class="user-photo-preview" id="userPhotoPreview">
+                <i class="fas fa-user"></i>
+              </div>
+              <div class="user-photo-actions">
+                <button type="button" class="btn-secondary" onclick="document.getElementById('newUserPhotoInput').click()">
+                  <i class="fas fa-camera"></i> Choose Profile Photo
+                </button>
+                <button type="button" class="delete-class-btn" id="removeUserPhotoBtn" onclick="clearUserPhoto()" style="display: none;">
+                  <i class="fas fa-times"></i> Remove Photo
+                </button>
+                <input type="file" id="newUserPhotoInput" accept="image/*" onchange="handleUserPhotoSelect()" style="display: none;">
+              </div>
+            </div>
             <div class="form-row">
               <div class="form-col">
                 <div class="form-group">
@@ -453,6 +467,9 @@
               </div>
             </div>
             <div class="action-buttons" style="margin-top: 0.75rem;">
+              <button type="button" class="btn-secondary" id="cancelEditUserBtn" onclick="resetUserForm()" style="display: none;">
+                <i class="fas fa-times"></i> Cancel Edit
+              </button>
               <button type="button" class="btn-primary" id="saveUserBtn" onclick="saveUserFromAdmin()">
                 <i class="fas fa-save"></i> Save User to Google Sheet
               </button>
