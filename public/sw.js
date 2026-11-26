@@ -1,12 +1,9 @@
-const CACHE_NAME = 'media-gallery-v1';
+const CACHE_NAME = 'media-gallery-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/css/styles.css',
-  '/js/app.js',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/js/app.js'
 ];
 
 self.addEventListener('install', (event) => {
