@@ -1518,6 +1518,120 @@ let liveFlashEnabled = false;
 let livePhysicalRotationDeg = 0;
 let liveMotionListenerActive = false;
 let liveAspectRatio = '4:3';
+let liveAiEnhanceEnabled = true;
+let liveAiLightingTimer = null;
+
+function toggleLiveAiEnhance() {
+  liveAiEnhanceEnabled = !liveAiEnhanceEnabled;
+  const btn = document.getElementById('liveAiBtn');
+  const hint = document.getElementById('liveAiHint');
+  if (btn) btn.classList.toggle('ai-on', liveAiEnhanceEnabled);
+  if (hint) hint.textContent = liveAiEnhanceEnabled ? '✨ AI Auto-Enhance ON' : 'AI Auto-Enhance OFF';
+}
+
+function startLiveAiAdvisor() {
+  stopLiveAiAdvisor();
+  const sampleCanvas = document.createElement('canvas');
+  sampleCanvas.width = 48;
+  sampleCanvas.height = 36;
+  const sCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+  liveAiLightingTimer = setInterval(() => {
+    const video = document.getElementById('liveCameraVideo');
+    const hint = document.getElementById('liveAiHint');
+    if (!video || !hint || !video.videoWidth || !liveCameraStream) return;
+    if (!liveAiEnhanceEnabled) {
+      hint.textContent = 'AI Auto-Enhance OFF';
+      return;
+    }
+    try {
+      sCtx.drawImage(video, 0, 0, 48, 36);
+      const data = sCtx.getImageData(0, 0, 48, 36).data;
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      }
+      const avgLuma = sum / (48 * 36);
+      if (avgLuma < 58 && !liveFlashEnabled) {
+        hint.textContent = '💡 Low light — tap ⚡ Flash or hold steady';
+      } else if (avgLuma > 215) {
+        hint.textContent = '☀️ Bright scene — AI balancing highlights';
+      } else {
+        hint.textContent = '✨ AI Auto-Enhance Ready';
+      }
+    } catch (e) {}
+  }, 1200);
+}
+
+function stopLiveAiAdvisor() {
+  if (liveAiLightingTimer) {
+    clearInterval(liveAiLightingTimer);
+    liveAiLightingTimer = null;
+  }
+}
+
+function applyAiPhotoEnhance(blob, quality = 0.82) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+
+      try {
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+        let lumaSum = 0;
+        const step = 16;
+        let count = 0;
+        for (let i = 0; i < d.length; i += 4 * step) {
+          lumaSum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          count++;
+        }
+        const avgLuma = count > 0 ? lumaSum / count : 128;
+        // Adaptive gamma lift for dark/backlit scenes + subtle contrast & vibrance
+        const gamma = avgLuma < 95 ? 0.84 : (avgLuma > 185 ? 1.06 : 0.94);
+        const contrast = 1.08;
+        const satBoost = 1.1;
+        const lut = new Uint8ClampedArray(256);
+        for (let v = 0; v < 256; v++) {
+          let n = Math.pow(v / 255, gamma) * 255;
+          n = (n - 128) * contrast + 128;
+          lut[v] = n < 0 ? 0 : (n > 255 ? 255 : n);
+        }
+
+        for (let i = 0; i < d.length; i += 4) {
+          let r = lut[d[i]];
+          let g = lut[d[i + 1]];
+          let b = lut[d[i + 2]];
+          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+          r = gray + (r - gray) * satBoost;
+          g = gray + (g - gray) * satBoost;
+          b = gray + (b - gray) * satBoost;
+          d[i] = r < 0 ? 0 : (r > 255 ? 255 : r);
+          d[i + 1] = g < 0 ? 0 : (g > 255 ? 255 : g);
+          d[i + 2] = b < 0 ? 0 : (b > 255 ? 255 : b);
+        }
+        ctx.putImageData(imgData, 0, 0);
+      } catch (e) {}
+
+      canvas.toBlob((outBlob) => resolve(outBlob || blob), 'image/jpeg', quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+    img.src = url;
+  });
+}
 
 function getLiveTargetAspectRatio() {
   if (liveAspectRatio === 'full') {
@@ -1702,6 +1816,7 @@ async function openLiveCamera(selection) {
     await video.play();
     liveFlashEnabled = false;
     updateLiveFlashButtonState();
+    startLiveAiAdvisor();
     modal.style.display = 'flex';
     requestAnimationFrame(() => updateLiveViewportAspect());
     return true;
@@ -1724,6 +1839,7 @@ function stopLiveCameraStream() {
   }
   liveFlashEnabled = false;
   updateLiveFlashButtonState();
+  stopLiveAiAdvisor();
   stopLiveOrientationSensor();
   const video = document.getElementById('liveCameraVideo');
   if (video) video.srcObject = null;
@@ -1956,7 +2072,8 @@ async function captureLiveCameraPhoto() {
           const orientedBlob = extraRotateDeg ? await rotateImageBlob(mirroredBlob, extraRotateDeg, 0.82) : mirroredBlob;
           const targetRatio = getLiveTargetAspectRatio();
           const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.82);
-          const finalFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          const enhancedBlob = liveAiEnhanceEnabled ? await applyAiPhotoEnhance(croppedBlob, 0.82) : croppedBlob;
+          const finalFile = new File([enhancedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(finalFile);
           return;
         } else {
@@ -1991,7 +2108,8 @@ async function captureLiveCameraPhoto() {
           const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.82) : blob;
           const targetRatio = getLiveTargetAspectRatio();
           const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.82);
-          const capturedFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          const enhancedBlob = liveAiEnhanceEnabled ? await applyAiPhotoEnhance(croppedBlob, 0.82) : croppedBlob;
+          const capturedFile = new File([enhancedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(capturedFile);
         }
         resolve();
