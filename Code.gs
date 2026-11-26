@@ -88,7 +88,7 @@ function doPost(e) {
     } else if (action === 'getUsersListForAdmin') {
       res = getUsersListForAdmin();
     } else if (action === 'addOrUpdateUser') {
-      res = addOrUpdateUserInSheet(contents.username, contents.password, contents.assignedClass, contents.details);
+      res = addOrUpdateUserInSheet(contents.username, contents.password, contents.assignedClass, contents.details, contents.photoUrl, contents.originalUsername);
     } else if (action === 'deleteUser') {
       res = deleteUserFromSheet(contents.username);
     } else if (action === 'authenticateUser') {
@@ -166,13 +166,47 @@ function ensureUsersSheetExists() {
   var sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(USERS_SHEET_NAME);
-    sheet.getRange(1, 1, 1, 4).setValues([['Username', 'Password', 'Class', 'Role / Details']]);
-    sheet.appendRow(['admin', 'password123', '', 'Administrator']);
-    sheet.appendRow(['Avinash', 'Avinash123', '', 'Administrator']);
+    sheet.getRange(1, 1, 1, 5).setValues([['Username', 'Password', 'Class', 'Role / Details', 'Profile Photo']]);
+    sheet.appendRow(['admin', 'password123', '', 'Administrator', '']);
+    sheet.appendRow(['Avinash', 'Avinash123', '', 'Administrator', '']);
   } else if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, 4).setValues([['Username', 'Password', 'Class', 'Role / Details']]);
+    sheet.getRange(1, 1, 1, 5).setValues([['Username', 'Password', 'Class', 'Role / Details', 'Profile Photo']]);
+  } else if (sheet.getLastColumn() < 5) {
+    sheet.getRange(1, 5).setValue('Profile Photo');
   }
   return sheet;
+}
+
+function saveProfilePhotoToDrive(username, photoDataUrl) {
+  if (!photoDataUrl || photoDataUrl.indexOf('data:image/') !== 0) {
+    return photoDataUrl || '';
+  }
+  try {
+    var parts = photoDataUrl.split(',');
+    var mimeMatch = parts[0].match(/data:(image\/[^;]+);/);
+    var contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    var base64Data = parts[1];
+
+    var rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+    var profilesFolder = getOrCreateFolder(rootFolder, '_UserProfiles');
+    var safeName = sanitizeFilename(username) + '_profile.jpg';
+
+    var existing = profilesFolder.getFilesByName(safeName);
+    while (existing.hasNext()) {
+      existing.next().setTrashed(true);
+    }
+
+    var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, safeName);
+    var file = profilesFolder.createFile(blob);
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (permErr) {}
+
+    return 'https://lh3.googleusercontent.com/d/' + file.getId();
+  } catch (e) {
+    console.error('Profile photo Drive upload fallback:', e);
+    return photoDataUrl;
+  }
 }
 
 /**
@@ -193,7 +227,14 @@ function getUsersFromSheet() {
         var uname = row[0].toString().trim();
         var pwd = row[1].toString().trim();
         var assignedClass = row[2] ? row[2].toString().trim() : '';
-        users[uname] = { password: pwd, assignedClass: assignedClass };
+        var details = row[3] ? row[3].toString().trim() : '';
+        var photoUrl = row[4] ? row[4].toString().trim() : '';
+        users[uname] = {
+          password: pwd,
+          assignedClass: assignedClass,
+          details: details,
+          photoUrl: photoUrl
+        };
       }
     }
     
@@ -217,7 +258,8 @@ function getUsersListForAdmin() {
           username: row[0].toString().trim(),
           password: row[1].toString().trim(),
           assignedClass: row[2] ? row[2].toString().trim() : '',
-          details: row[3] ? row[3].toString().trim() : ''
+          details: row[3] ? row[3].toString().trim() : '',
+          photoUrl: row[4] ? row[4].toString().trim() : ''
         });
       }
     }
@@ -227,7 +269,7 @@ function getUsersListForAdmin() {
   }
 }
 
-function addOrUpdateUserInSheet(username, password, assignedClass, details) {
+function addOrUpdateUserInSheet(username, password, assignedClass, details, photoUrl, originalUsername) {
   try {
     if (!username || !password) {
       return { status: 'error', message: 'Username and password are required' };
@@ -236,19 +278,21 @@ function addOrUpdateUserInSheet(username, password, assignedClass, details) {
     var cleanPass = password.toString().trim();
     var cleanClass = assignedClass ? assignedClass.toString().trim() : '';
     var cleanDetails = details ? details.toString().trim() : '';
+    var lookupUser = (originalUsername ? originalUsername.toString().trim() : cleanUser).toLowerCase();
+    var finalPhotoUrl = saveProfilePhotoToDrive(cleanUser, photoUrl ? photoUrl.toString().trim() : '');
 
     var sheet = ensureUsersSheetExists();
     var data = sheet.getDataRange().getValues();
     var startRow = data[0] && data[0][0] && data[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
 
     for (var i = startRow; i < data.length; i++) {
-      if (data[i][0] && data[i][0].toString().trim().toLowerCase() === cleanUser.toLowerCase()) {
-        sheet.getRange(i + 1, 1, 1, 4).setValues([[cleanUser, cleanPass, cleanClass, cleanDetails]]);
+      if (data[i][0] && data[i][0].toString().trim().toLowerCase() === lookupUser) {
+        sheet.getRange(i + 1, 1, 1, 5).setValues([[cleanUser, cleanPass, cleanClass, cleanDetails, finalPhotoUrl]]);
         return { status: 'success', message: 'User "' + cleanUser + '" updated in Google Sheet.' };
       }
     }
 
-    sheet.appendRow([cleanUser, cleanPass, cleanClass, cleanDetails]);
+    sheet.appendRow([cleanUser, cleanPass, cleanClass, cleanDetails, finalPhotoUrl]);
     return { status: 'success', message: 'User "' + cleanUser + '" added to Google Sheet.' };
   } catch (e) {
     return { status: 'error', message: 'Failed to save user: ' + e.message };
