@@ -180,11 +180,55 @@ async function getOrCreateFolder(drive, parentFolderId, folderName) {
   return folder.data;
 }
 
-async function uploadFilesToDrive(filesData, eventName, className, addWatermark = true) {
+async function uploadSingleFileToDriveFolder(drive, targetFolderId, fileData) {
+  let filename = sanitizeFilename(fileData.filename);
+  const contentType = fileData.contentType || 'image/jpeg';
+  const buffer = Buffer.from(fileData.data, 'base64');
+
+  const bufferStream = new stream.PassThrough();
+  bufferStream.end(buffer);
+
+  const uploadedFile = await drive.files.create({
+    requestBody: {
+      name: filename,
+      parents: [targetFolderId]
+    },
+    media: {
+      mimeType: contentType,
+      body: bufferStream
+    },
+    supportsAllDrives: true,
+    fields: 'id, name, webViewLink'
+  });
+
+  await drive.permissions.create({
+    fileId: uploadedFile.data.id,
+    requestBody: { role: 'reader', type: 'anyone' },
+    supportsAllDrives: true
+  });
+
+  return {
+    name: filename,
+    savedName: filename,
+    url: uploadedFile.data.webViewLink
+  };
+}
+
+async function uploadFilesToDrive(filesData, eventName, className, addWatermark = true, originalFilesData = []) {
+  const originalsList = Array.isArray(originalFilesData) ? [...originalFilesData] : [];
+
   if (addWatermark && filesData && filesData.length > 0) {
     for (let i = 0; i < filesData.length; i++) {
       const fileData = filesData[i];
       if (fileData.contentType && fileData.contentType.startsWith('video/')) {
+        // Preserve original unwatermarked video for the "Without Watermark" folder
+        originalsList.push({
+          filename: fileData.filename,
+          contentType: fileData.contentType,
+          size: fileData.size,
+          data: fileData.data
+        });
+
         console.log(`Processing FFmpeg watermark for video: ${fileData.filename}`);
         try {
           const inputBuffer = Buffer.from(fileData.data, 'base64');
@@ -208,6 +252,7 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
       console.log('Forwarding upload to Google Apps Script Web App URL:', config.gasWebAppUrl);
       const res = await callGasBridge('uploadFilesToDrive', {
         filesData: filesData,
+        originalFilesData: originalsList,
         eventName: eventName,
         className: className,
         addWatermark: addWatermark
@@ -222,7 +267,7 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
   const sheets = getSheetsClient();
 
   if (!drive || !sheets) {
-    return mockService.uploadFilesToDrive(filesData, eventName, className, addWatermark);
+    return mockService.uploadFilesToDrive(filesData, eventName, className, addWatermark, originalsList);
   }
 
   try {
@@ -234,63 +279,53 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     const eventFolder = await getOrCreateFolder(drive, rootFolderId, eventName);
     const classSubfolder = await getOrCreateFolder(drive, eventFolder.id, className);
 
+    const withWatermarkFolder = addWatermark
+      ? await getOrCreateFolder(drive, classSubfolder.id, 'With Watermark')
+      : null;
+    const withoutWatermarkFolder = await getOrCreateFolder(drive, classSubfolder.id, 'Without Watermark');
+
     const fileUrls = [];
 
+    // Upload watermarked files (or unwatermarked when toggle is OFF)
+    const primaryTargetFolderId = withWatermarkFolder ? withWatermarkFolder.id : withoutWatermarkFolder.id;
     for (let i = 0; i < filesData.length; i++) {
-      const fileData = filesData[i];
       try {
-        let filename = sanitizeFilename(fileData.filename);
-        const contentType = fileData.contentType || 'image/jpeg';
-        const buffer = Buffer.from(fileData.data, 'base64');
-
-        const bufferStream = new stream.PassThrough();
-        bufferStream.end(buffer);
-
-        const fileMetadata = {
-          name: filename,
-          parents: [classSubfolder.id]
-        };
-
-        const media = {
-          mimeType: contentType,
-          body: bufferStream
-        };
-
-        const uploadedFile = await drive.files.create({
-          requestBody: fileMetadata,
-          media: media,
-          supportsAllDrives: true,
-          fields: 'id, name, webViewLink'
-        });
-
-        await drive.permissions.create({
-          fileId: uploadedFile.data.id,
-          requestBody: {
-            role: 'reader',
-            type: 'anyone'
-          },
-          supportsAllDrives: true
-        });
-
-        fileUrls.push({
-          name: filename,
-          url: uploadedFile.data.webViewLink
-        });
+        const uploaded = await uploadSingleFileToDriveFolder(drive, primaryTargetFolderId, filesData[i]);
+        fileUrls.push(uploaded);
       } catch (fErr) {
-        console.error(`Failed to upload file ${fileData.filename}:`, fErr.message);
+        console.error(`Failed to upload file ${filesData[i].filename}:`, fErr.message);
       }
     }
 
-    const folderUrl = classSubfolder.webViewLink || `https://drive.google.com/drive/folders/${classSubfolder.id}`;
+    // Upload original unwatermarked copies to "Without Watermark" folder
+    if (addWatermark && originalsList.length > 0) {
+      for (let i = 0; i < originalsList.length; i++) {
+        try {
+          await uploadSingleFileToDriveFolder(drive, withoutWatermarkFolder.id, originalsList[i]);
+        } catch (origErr) {
+          console.error(`Failed to upload original file ${originalsList[i].filename}:`, origErr.message);
+        }
+      }
+    }
+
+    const withWatermarkFolderUrl = withWatermarkFolder
+      ? (withWatermarkFolder.webViewLink || `https://drive.google.com/drive/folders/${withWatermarkFolder.id}`)
+      : '';
+    const withoutWatermarkFolderUrl = withoutWatermarkFolder.webViewLink || `https://drive.google.com/drive/folders/${withoutWatermarkFolder.id}`;
+    const folderUrl = withWatermarkFolderUrl || withoutWatermarkFolderUrl;
 
     await updateSheet2(sheets, eventName, className, folderUrl, fileUrls);
     await updateAdditionalSheet(sheets, eventName, fileUrls);
 
     return {
       status: 'success',
-      message: `${filesData.length} file(s) processed ${addWatermark ? 'WITH watermark' : 'WITHOUT watermark'}`,
+      message: addWatermark
+        ? `${filesData.length} file(s) saved to both "With Watermark" (WhatsApp) and "Without Watermark" folders`
+        : `${filesData.length} file(s) saved to "Without Watermark" folder`,
       urls: fileUrls,
       folderUrl: folderUrl,
+      withWatermarkFolderUrl,
+      withoutWatermarkFolderUrl,
       watermarkApplied: addWatermark
     };
 
