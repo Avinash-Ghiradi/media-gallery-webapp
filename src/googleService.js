@@ -251,22 +251,21 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     try {
       console.log('Forwarding upload to Google Apps Script Web App URL:', config.gasWebAppUrl);
       if (addWatermark && originalsList.length > 0) {
-        const [wmRes] = await Promise.all([
-          callGasBridge('uploadFilesToDrive', {
-            filesData: filesData,
-            originalFilesData: [],
-            eventName: eventName,
-            className: className,
-            addWatermark: true
-          }),
-          callGasBridge('uploadFilesToDrive', {
-            filesData: originalsList,
-            originalFilesData: [],
-            eventName: eventName,
-            className: className,
-            addWatermark: false
-          })
-        ]);
+        // Run sequentially so folder creation in Call 1 completes before Call 2 reuses the exact same folders
+        const wmRes = await callGasBridge('uploadFilesToDrive', {
+          filesData: filesData,
+          originalFilesData: [],
+          eventName: eventName,
+          className: className,
+          addWatermark: true
+        });
+        await callGasBridge('uploadFilesToDrive', {
+          filesData: originalsList,
+          originalFilesData: [],
+          eventName: eventName,
+          className: className,
+          addWatermark: false
+        });
         if (wmRes) return wmRes;
       } else {
         const res = await callGasBridge('uploadFilesToDrive', {
