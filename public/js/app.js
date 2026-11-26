@@ -1446,18 +1446,86 @@ async function triggerDirectCamera() {
 let liveFlashEnabled = false;
 let livePhysicalRotationDeg = 0;
 let liveMotionListenerActive = false;
+let liveAspectRatio = '4:3';
+
+function updateLiveViewportAspect() {
+  const viewport = document.getElementById('liveCameraViewport');
+  const stage = document.querySelector('.live-camera-stage');
+  const btn = document.getElementById('liveAspectBtn');
+  if (btn) btn.textContent = liveAspectRatio;
+  if (!viewport || !stage) return;
+
+  const rect = stage.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+
+  const isPortraitScreen = rect.height >= rect.width;
+  const baseRatio = liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
+  const targetRatio = isPortraitScreen ? (1 / baseRatio) : baseRatio;
+
+  let w = rect.width;
+  let h = w / targetRatio;
+  if (h > rect.height) {
+    h = rect.height;
+    w = h * targetRatio;
+  }
+  viewport.style.width = `${Math.round(w)}px`;
+  viewport.style.height = `${Math.round(h)}px`;
+}
+
+function toggleLiveAspectRatio() {
+  liveAspectRatio = liveAspectRatio === '4:3' ? '16:9' : '4:3';
+  updateLiveViewportAspect();
+}
+
+window.addEventListener('resize', () => {
+  const modal = document.getElementById('liveCameraModal');
+  if (modal && modal.style.display !== 'none') {
+    updateLiveViewportAspect();
+  }
+});
+
+function updateLiveLevelUI(ax, ay, az) {
+  const levelEl = document.getElementById('liveCameraLevel');
+  const lineEl = document.getElementById('liveLevelLine');
+  const degEl = document.getElementById('liveLevelDeg');
+  if (!levelEl || !lineEl || !degEl) return;
+
+  // When phone is held flat (e.g. shooting down at a document), show level as Flat
+  if (typeof az === 'number' && Math.abs(az) > 8.6 && Math.hypot(ax, ay) < 3.5) {
+    levelEl.classList.add('is-level');
+    lineEl.style.transform = 'rotate(0deg)';
+    degEl.textContent = '0°';
+    return;
+  }
+
+  let tiltDeg = 0;
+  if (Math.abs(ax) > Math.abs(ay)) {
+    // Physical landscape
+    tiltDeg = Math.atan2(ay, Math.abs(ax)) * (180 / Math.PI);
+  } else {
+    // Physical portrait
+    tiltDeg = Math.atan2(ax, Math.abs(ay)) * (180 / Math.PI);
+  }
+  const rounded = Math.round(tiltDeg);
+  const isLevel = Math.abs(tiltDeg) <= 1.5;
+  levelEl.classList.toggle('is-level', isLevel);
+  lineEl.style.transform = `rotate(${(-tiltDeg).toFixed(1)}deg)`;
+  degEl.textContent = `${Math.abs(rounded)}°`;
+}
 
 function handleLiveDeviceMotion(e) {
   const g = e && e.accelerationIncludingGravity;
   if (!g || typeof g.x !== 'number' || typeof g.y !== 'number') return;
   const ax = g.x;
   const ay = g.y;
+  const az = typeof g.z === 'number' ? g.z : 0;
   // Detect physical landscape tilt even when OS Auto-Rotate is disabled
   if (Math.abs(ax) > Math.abs(ay) * 1.35 && Math.abs(ax) > 4.5) {
     livePhysicalRotationDeg = ax > 0 ? -90 : 90;
   } else if (Math.abs(ay) > Math.abs(ax) * 1.35 && Math.abs(ay) > 4.5) {
     livePhysicalRotationDeg = 0;
   }
+  updateLiveLevelUI(ax, ay, az);
 }
 
 function startLiveOrientationSensor() {
@@ -1541,6 +1609,7 @@ async function openLiveCamera(selection) {
     liveFlashEnabled = false;
     updateLiveFlashButtonState();
     modal.style.display = 'flex';
+    requestAnimationFrame(() => updateLiveViewportAspect());
     return true;
   } catch (err) {
     console.warn('Live camera unavailable, falling back to system camera:', err.message);
@@ -1666,6 +1735,54 @@ function rotateImageBlob(blob, degrees, quality = 0.92) {
   });
 }
 
+function cropImageToAspectRatio(blob, targetRatio, quality = 0.84) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      const isLandscape = w >= h;
+      const desiredAspect = isLandscape ? targetRatio : (1 / targetRatio);
+      const currentAspect = w / h;
+
+      if (Math.abs(currentAspect - desiredAspect) <= 0.02) {
+        URL.revokeObjectURL(url);
+        return resolve(blob);
+      }
+
+      let sx = 0, sy = 0, sw = w, sh = h;
+      if (currentAspect > desiredAspect) {
+        sw = Math.round(h * desiredAspect);
+        sx = Math.round((w - sw) / 2);
+      } else {
+        sh = Math.round(w / desiredAspect);
+        sy = Math.round((h - sh) / 2);
+      }
+
+      const maxDim = 1920;
+      const scale = Math.min(1, maxDim / Math.max(sw, sh));
+      const outW = Math.max(1, Math.round(sw * scale));
+      const outH = Math.max(1, Math.round(sh * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((outBlob) => resolve(outBlob || blob), 'image/jpeg', quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+    img.src = url;
+  });
+}
+
 async function rotateLiveCapturedPhoto() {
   if (!livePendingReviewFile) return;
   const rotatedBlob = await rotateImageBlob(livePendingReviewFile, 90, 0.92);
@@ -1715,7 +1832,9 @@ async function captureLiveCameraPhoto() {
           const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
           const compressed = await compressPhotoHighQuality(rawFile, 1920, 0.84);
           const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.84) : compressed.blob;
-          const finalFile = new File([orientedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          const targetRatio = liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
+          const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.84);
+          const finalFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(finalFile);
           return;
         } else {
@@ -1744,7 +1863,9 @@ async function captureLiveCameraPhoto() {
       canvas.toBlob(async (blob) => {
         if (blob) {
           const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.84) : blob;
-          const capturedFile = new File([orientedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          const targetRatio = liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
+          const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.84);
+          const capturedFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(capturedFile);
         }
         resolve();
