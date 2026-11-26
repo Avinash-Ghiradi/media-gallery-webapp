@@ -954,6 +954,35 @@ function addWatermarkToImage(file, eventName, className, callback) {
   reader.readAsDataURL(file);
 }
 
+let noticeFocusTargetId = '';
+
+function showNoticePopup(message, focusElementId = '', title = 'Action Required') {
+  const modal = document.getElementById('noticeModal');
+  const titleEl = document.getElementById('noticeModalTitle');
+  const msgEl = document.getElementById('noticeModalMessage');
+  if (!modal || !msgEl) {
+    alert(message);
+    return;
+  }
+  noticeFocusTargetId = focusElementId;
+  if (titleEl) titleEl.textContent = title;
+  msgEl.textContent = message;
+  modal.style.display = 'flex';
+}
+
+function closeNoticeModal() {
+  const modal = document.getElementById('noticeModal');
+  if (modal) modal.style.display = 'none';
+  if (noticeFocusTargetId) {
+    const el = document.getElementById(noticeFocusTargetId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+    }
+    noticeFocusTargetId = '';
+  }
+}
+
 // Validate and return selected event and class names
 function getSelectedEventAndClass() {
   const eventSelect = document.getElementById('eventName');
@@ -965,19 +994,19 @@ function getSelectedEventAndClass() {
   const className = classSelect && classSelect.value === 'new' ? classNameInput.value.trim() : (classSelect ? classSelect.value : '');
 
   if (!eventName) {
-    showStatus('Please select or enter an event name first', 'error');
+    showNoticePopup('Please select or enter an event name first', 'eventName');
     return null;
   }
   if (eventSelect && eventSelect.value === 'new' && eventName.length < 3) {
-    showStatus('Event name must be at least 3 characters', 'error');
+    showNoticePopup('Event name must be at least 3 characters', 'newEventName');
     return null;
   }
   if (!className) {
-    showStatus('Please select or enter a class name first', 'error');
+    showNoticePopup('Please select or enter a class name first', 'className');
     return null;
   }
   if (classSelect && classSelect.value === 'new' && className.length < 2) {
-    showStatus('Class name must be at least 2 characters', 'error');
+    showNoticePopup('Class name must be at least 2 characters', 'newClassName');
     return null;
   }
 
@@ -987,11 +1016,7 @@ function getSelectedEventAndClass() {
 // Open device camera directly for instant photo capture & upload
 function triggerDirectCamera() {
   const selection = getSelectedEventAndClass();
-  if (!selection) {
-    const eventEl = document.getElementById('eventName');
-    if (eventEl) eventEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return;
-  }
+  if (!selection) return;
 
   const cameraInput = document.getElementById('cameraInput');
   if (cameraInput) {
@@ -1035,7 +1060,7 @@ function handleDirectCameraCapture() {
 function uploadFiles() {
   const selection = getSelectedEventAndClass();
   if (!selection) return;
-  if (selectedFiles.length === 0) return showStatus('Please select at least one file', 'error');
+  if (selectedFiles.length === 0) return showNoticePopup('Please select at least one file');
 
   if (!watermarkEnabled) {
     if (!confirm('Watermark is turned OFF. Images will be uploaded without watermark or border.\n\nClick OK to continue or Cancel to turn watermark ON.')) {
