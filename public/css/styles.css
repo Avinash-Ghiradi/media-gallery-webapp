@@ -1648,25 +1648,37 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
   body {
-    padding: 0.375rem;
+    padding: 0.25rem;
+    background-color: #f1f5f9;
   }
 
   .container {
     border-radius: var(--radius);
+    border: none;
+    box-shadow: var(--shadow);
   }
 
   .header {
     flex-direction: column;
     text-align: center;
-    padding: 1rem;
+    padding: 0.875rem 1rem;
     gap: 0.75rem;
   }
   
   .brand {
     justify-content: center;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.4rem;
+  }
+
+  .logo {
+    height: 2.75rem;
   }
 
   .school-info {
@@ -1674,59 +1686,104 @@ input:checked + .slider:before {
   }
 
   .school-name {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+  }
+
+  .school-tagline {
+    font-size: 0.78rem;
   }
   
   .user-info {
     justify-content: center;
+    flex-wrap: wrap;
     width: 100%;
     padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .install-app-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  .tab-content {
+    padding: 0;
   }
 
   .content {
-    padding: 1rem;
+    padding: 0.875rem;
   }
 
   h1 {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     margin-bottom: 1rem;
   }
 
   input, select {
     font-size: 16px;
     min-height: 44px;
+    padding: 0.65rem 2.25rem 0.65rem 0.875rem;
   }
   
   .form-row {
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.875rem;
     margin-bottom: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .camera-instant-box {
+    padding: 0.875rem;
+  }
+
+  .camera-instant-btn {
+    min-height: 54px;
+    font-size: 1rem;
+  }
+
+  .file-upload-area {
+    padding: 1.5rem 0.75rem;
   }
 
   .watermark-toggle {
     flex-wrap: wrap;
     gap: 0.75rem;
+    padding: 0.875rem;
+    margin-bottom: 1rem;
   }
   
   #preview {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.625rem;
+  }
+
+  .preview-item .remove-btn {
+    opacity: 1;
+    width: 2rem;
+    height: 2rem;
+    top: 0.35rem;
+    right: 0.35rem;
   }
 
   .preview-section {
-    padding: 1rem;
-    margin-top: 1.25rem;
+    padding: 0.875rem;
+    margin-top: 1rem;
   }
 
   .preview-header {
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.875rem;
   }
   
   .action-buttons {
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.625rem;
+    margin-top: 1.25rem;
   }
   
   button,
@@ -1743,14 +1800,50 @@ input:checked + .slider:before {
   }
   
   .folders-controls select,
-  .view-folders-btn {
+  .view-folders-btn,
+  .copy-all-btn,
+  .refresh-btn {
     width: 100%;
+    justify-content: center;
+    min-height: 44px;
   }
 
   .links-header,
-  .section-header {
+  .section-header,
+  .folder-header {
     flex-wrap: wrap;
-    gap: 0.75rem;
+    gap: 0.625rem;
+  }
+
+  .links-content {
+    padding: 0.625rem;
+    max-height: 60vh;
+  }
+
+  .folder-card {
+    padding: 0.75rem;
+  }
+
+  .link-item {
+    flex-wrap: wrap;
+    padding: 0.625rem;
+  }
+
+  .link-actions {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .link-action-btn {
+    padding: 0.5rem 0.75rem;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   
   .tabs-navigation {
@@ -1758,7 +1851,7 @@ input:checked + .slider:before {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    gap: 0.25rem;
+    gap: 0.125rem;
     padding: 0 0.25rem;
   }
 
@@ -1771,11 +1864,16 @@ input:checked + .slider:before {
     width: auto;
     white-space: nowrap;
     justify-content: center;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
+    padding: 0.75rem 0.875rem;
+    font-size: 0.8125rem;
     min-height: 44px;
     border-bottom: 3px solid transparent;
     border-left: none;
+  }
+
+  .tab-button .badge {
+    top: 4px;
+    right: 4px;
   }
   
   .tab-button.active {
@@ -1792,18 +1890,44 @@ input:checked + .slider:before {
     max-width: 100%;
   }
 
+  .login-header {
+    padding: 1.5rem 1rem;
+  }
+
   .login-content {
-    padding: 1.25rem;
+    padding: 1.25rem 1rem;
+  }
+
+  .recent-folders-section {
+    margin-top: 0.75rem;
+    padding: 0.875rem;
   }
   
   .recent-folders-grid {
     grid-template-columns: 1fr;
   }
+
+  .delete-warning {
+    flex-direction: column;
+    padding: 1rem;
+    gap: 0.625rem;
+    margin-bottom: 1rem;
+  }
   
   .event-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 1rem;
+    gap: 0.75rem;
+    padding: 0.875rem;
+  }
+
+  .event-info {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .event-details {
+    padding: 0.875rem;
   }
   
   .event-actions {
@@ -1813,31 +1937,58 @@ input:checked + .slider:before {
   .delete-event-btn {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
   }
   
   .class-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 1rem;
+    gap: 0.75rem;
+    padding: 0.875rem;
+  }
+
+  .class-stats {
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
   
   .class-actions {
     width: 100%;
+    flex-direction: column;
   }
   
   .view-class-btn,
   .delete-class-btn {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
+  }
+
+  .modal-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .modal-body {
+    padding: 1.25rem;
   }
   
   .modal-actions {
     flex-direction: column;
+    gap: 0.625rem;
   }
   
   .modal-cancel-btn,
   .modal-confirm-btn {
     width: 100%;
+    min-height: 44px;
+  }
+
+  .copy-notification {
+    left: 1rem;
+    right: 1rem;
+    top: auto;
+    bottom: 1rem;
+    justify-content: center;
   }
 
   .recent-folder-actions {
@@ -1848,7 +1999,7 @@ input:checked + .slider:before {
   .recent-folder-url {
     width: 100%;
     text-align: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
     font-size: 0.75rem;
   }
   
@@ -1868,8 +2019,8 @@ input:checked + .slider:before {
   }
 
   .recent-folder-card {
-    padding: 1rem;
-    margin-bottom: 1rem;
+    padding: 0.875rem;
+    margin-bottom: 0.75rem;
   }
 }
 
