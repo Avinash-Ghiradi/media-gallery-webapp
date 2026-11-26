@@ -132,6 +132,80 @@ app.post('/api/auth/change-password', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Self-service profile update for any logged-in user
+app.post('/api/auth/profile', auth.requireAuth, async (req, res) => {
+  try {
+    const currentUsername = req.session.user.username;
+    const assignedClass = req.session.user.assignedClass || '';
+    const { fullName, details, photoUrl, newPassword } = req.body;
+
+    const cleanFullName = (fullName !== undefined ? fullName : (req.session.user.fullName || '')).toString().trim();
+    const cleanDetails = (details !== undefined ? details : (req.session.user.details || '')).toString().trim();
+    const cleanPhotoUrl = (photoUrl !== undefined ? photoUrl : (req.session.user.photoUrl || '')).toString().trim();
+    const cleanNewPass = (newPassword || '').toString().trim();
+
+    if (cleanNewPass) {
+      if (cleanNewPass.length < 6) {
+        return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters.' });
+      }
+      if (cleanNewPass === 'Success@123') {
+        return res.status(400).json({ status: 'error', message: 'Please choose a password different from Success@123.' });
+      }
+    }
+
+    let finalPassword = cleanNewPass;
+    if (!finalPassword) {
+      const users = await googleService.getUsersFromSheet();
+      const entry = users[currentUsername];
+      finalPassword = (entry && typeof entry === 'object') ? entry.password : entry;
+      if (!finalPassword) {
+        return res.status(400).json({ status: 'error', message: 'Could not verify current password. Please enter a new password.' });
+      }
+    }
+
+    const result = await googleService.addOrUpdateUser(
+      currentUsername,
+      finalPassword,
+      assignedClass,
+      cleanDetails,
+      cleanPhotoUrl,
+      currentUsername,
+      cleanFullName
+    );
+
+    if (result && result.status === 'success') {
+      req.session.user.fullName = cleanFullName;
+      req.session.user.details = cleanDetails;
+      req.session.user.photoUrl = cleanPhotoUrl;
+      if (cleanNewPass) req.session.user.mustChangePassword = false;
+
+      // Refresh photoUrl if Drive returned a hosted URL
+      const users = await googleService.getUsersFromSheet();
+      const updated = users[currentUsername];
+      if (updated && typeof updated === 'object' && updated.photoUrl) {
+        req.session.user.photoUrl = updated.photoUrl;
+      }
+
+      return req.session.save(() => {
+        res.json({
+          status: 'success',
+          message: 'Profile updated successfully!',
+          user: {
+            username: currentUsername,
+            fullName: req.session.user.fullName,
+            assignedClass: req.session.user.assignedClass,
+            details: req.session.user.details,
+            photoUrl: req.session.user.photoUrl
+          }
+        });
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 /* ==========================================================================
    UPLOAD & DRIVE ROUTES (Protected)
    ========================================================================== */
