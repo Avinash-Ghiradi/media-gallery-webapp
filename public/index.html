@@ -679,6 +679,36 @@
     </div>
   </div>
 
+  <!-- Live Continuous Camera Viewfinder Modal -->
+  <div id="liveCameraModal" class="live-camera-modal" style="display: none;">
+    <div class="live-camera-topbar">
+      <div class="live-camera-dest">
+        <div id="liveCameraDestLabel" class="live-camera-title">Event &gt; Class</div>
+        <div id="liveCameraQueueText" class="live-camera-queue">Ready to capture</div>
+      </div>
+      <div class="live-camera-top-actions">
+        <button type="button" class="live-cam-icon-btn" onclick="switchLiveCameraFacing()" title="Switch Front/Rear Camera">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button type="button" class="live-cam-done-btn" onclick="closeLiveCamera()">
+          <i class="fas fa-check"></i> Done
+        </button>
+      </div>
+    </div>
+
+    <div class="live-camera-stage">
+      <video id="liveCameraVideo" autoplay playsinline muted></video>
+      <div id="liveCameraFlash" class="live-camera-flash"></div>
+    </div>
+
+    <div class="live-camera-controls">
+      <button type="button" class="live-shutter-btn" id="liveShutterBtn" onclick="captureLiveCameraPhoto()" aria-label="Take Photo">
+        <span class="live-shutter-inner"></span>
+      </button>
+      <div class="live-camera-hint">Tap shutter to take &amp; auto-upload photos continuously</div>
+    </div>
+  </div>
+
   <!-- Force Password Change Modal -->
   <div id="forceChangePasswordModal" class="confirmation-modal" style="display: none;">
     <div class="modal-content">
