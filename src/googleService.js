@@ -743,64 +743,73 @@ async function getRecentUploads() {
 }
 
 async function getAllEventsForDeletion() {
-  if (config.gasWebAppUrl) {
-    try {
-      const res = await callGasBridge('getAllEventsForDeletion');
-      if (res && res.status === 'success') return res;
-      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
-    } catch (e) {
-      console.error('GAS getAllEventsForDeletion error:', e.message);
-    }
-  }
-
   const drive = getDriveClient();
-  if (!drive) return mockService.getAllEventsForDeletion();
+  if (!drive) {
+    if (config.gasWebAppUrl) {
+      try {
+        const res = await callGasBridge('getAllEventsForDeletion');
+        if (res && res.status === 'success') return res;
+        if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+      } catch (e) {
+        console.error('GAS getAllEventsForDeletion error:', e.message);
+      }
+    }
+    return mockService.getAllEventsForDeletion();
+  }
 
   try {
     const eventRes = await drive.files.list({
       q: `'${config.driveRootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      pageSize: 200,
       fields: 'files(id, name, webViewLink, createdTime)'
     });
 
-    const eventFolders = eventRes.data.files || [];
-    const events = [];
+    const eventFolders = (eventRes.data.files || []).filter((f) => f.name !== '_UserProfiles');
 
-    for (const eventFolder of eventFolders) {
-      const classRes = await drive.files.list({
-        q: `'${eventFolder.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id, name, webViewLink, createdTime)'
-      });
-
-      const classFolders = classRes.data.files || [];
-      const classes = [];
-
-      for (const classFolder of classFolders) {
-        const fileRes = await drive.files.list({
-          q: `'${classFolder.id}' in parents and trashed = false`,
-          fields: 'files(id)'
+    const events = await Promise.all(
+      eventFolders.map(async (eventFolder) => {
+        const classRes = await drive.files.list({
+          q: `'${eventFolder.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+          pageSize: 200,
+          fields: 'files(id, name, webViewLink, createdTime)'
         });
-        const fileCount = (fileRes.data.files || []).length;
 
-        classes.push({
-          name: classFolder.name,
-          id: classFolder.id,
-          url: classFolder.webViewLink,
-          dateCreated: classFolder.createdTime,
-          fileCount: fileCount
-        });
-      }
+        const classFolders = classRes.data.files || [];
+        const classes = await Promise.all(
+          classFolders.map(async (classFolder) => {
+            const fileRes = await drive.files.list({
+              q: `'${classFolder.id}' in parents and trashed = false`,
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+              pageSize: 500,
+              fields: 'files(id)'
+            });
+            return {
+              name: classFolder.name,
+              id: classFolder.id,
+              url: classFolder.webViewLink,
+              dateCreated: classFolder.createdTime,
+              fileCount: (fileRes.data.files || []).length
+            };
+          })
+        );
 
-      classes.sort((a, b) => a.name.localeCompare(b.name));
+        classes.sort((a, b) => a.name.localeCompare(b.name));
 
-      events.push({
-        name: eventFolder.name,
-        id: eventFolder.id,
-        url: eventFolder.webViewLink,
-        dateCreated: eventFolder.createdTime,
-        classCount: classes.length,
-        classes: classes
-      });
-    }
+        return {
+          name: eventFolder.name,
+          id: eventFolder.id,
+          url: eventFolder.webViewLink,
+          dateCreated: eventFolder.createdTime,
+          classCount: classes.length,
+          classes: classes
+        };
+      })
+    );
 
     events.sort((a, b) => a.name.localeCompare(b.name));
     return { status: 'success', data: events };
