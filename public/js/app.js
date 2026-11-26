@@ -1477,15 +1477,35 @@ let livePhysicalRotationDeg = 0;
 let liveMotionListenerActive = false;
 let liveAspectRatio = '4:3';
 
+function getLiveTargetAspectRatio() {
+  if (liveAspectRatio === 'full') {
+    const stage = document.querySelector('.live-camera-stage');
+    if (stage) {
+      const rect = stage.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        return Math.max(rect.width, rect.height) / Math.min(rect.width, rect.height);
+      }
+    }
+    return Math.max(window.innerWidth, window.innerHeight) / Math.max(1, Math.min(window.innerWidth, window.innerHeight));
+  }
+  return liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
+}
+
 function updateLiveViewportAspect() {
   const viewport = document.getElementById('liveCameraViewport');
   const stage = document.querySelector('.live-camera-stage');
   const btn = document.getElementById('liveAspectBtn');
-  if (btn) btn.textContent = liveAspectRatio;
+  if (btn) btn.textContent = liveAspectRatio === 'full' ? 'Full' : liveAspectRatio;
   if (!viewport || !stage) return;
 
   const rect = stage.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
+
+  if (liveAspectRatio === 'full') {
+    viewport.style.width = `${Math.round(rect.width)}px`;
+    viewport.style.height = `${Math.round(rect.height)}px`;
+    return;
+  }
 
   const isPortraitScreen = rect.height >= rect.width;
   const baseRatio = liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
@@ -1502,7 +1522,9 @@ function updateLiveViewportAspect() {
 }
 
 function toggleLiveAspectRatio() {
-  liveAspectRatio = liveAspectRatio === '4:3' ? '16:9' : '4:3';
+  if (liveAspectRatio === '4:3') liveAspectRatio = '16:9';
+  else if (liveAspectRatio === '16:9') liveAspectRatio = 'full';
+  else liveAspectRatio = '4:3';
   updateLiveViewportAspect();
 }
 
@@ -1859,10 +1881,10 @@ async function captureLiveCameraPhoto() {
         // takePhoto() returns portrait for a landscape viewfinder (or vice versa)
         if (!dims || videoIsLandscape === null || photoIsLandscape === videoIsLandscape) {
           const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
-          const compressed = await compressPhotoHighQuality(rawFile, 1920, 0.84);
-          const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.84) : compressed.blob;
-          const targetRatio = liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
-          const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.84);
+          const compressed = await compressPhotoHighQuality(rawFile, 1600, 0.82);
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.82) : compressed.blob;
+          const targetRatio = getLiveTargetAspectRatio();
+          const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.82);
           const finalFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(finalFile);
           return;
@@ -1875,7 +1897,7 @@ async function captureLiveCameraPhoto() {
     }
 
     if (!video.videoWidth || !video.videoHeight) return;
-    const maxDim = 1920;
+    const maxDim = 1600;
     const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
     const w = Math.max(1, Math.round(video.videoWidth * scale));
     const h = Math.max(1, Math.round(video.videoHeight * scale));
@@ -1891,14 +1913,14 @@ async function captureLiveCameraPhoto() {
     await new Promise((resolve) => {
       canvas.toBlob(async (blob) => {
         if (blob) {
-          const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.84) : blob;
-          const targetRatio = liveAspectRatio === '16:9' ? (16 / 9) : (4 / 3);
-          const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.84);
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.82) : blob;
+          const targetRatio = getLiveTargetAspectRatio();
+          const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.82);
           const capturedFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(capturedFile);
         }
         resolve();
-      }, 'image/jpeg', 0.84);
+      }, 'image/jpeg', 0.82);
     });
   } finally {
     if (shutterBtn) shutterBtn.disabled = false;
