@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   preloadSchoolLogo();
+  loadAppBranding();
 
   document.getElementById('password').addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
@@ -516,7 +517,7 @@ function showCopyNotification(text) {
   }, 2000);
 }
 
-function preloadSchoolLogo() {
+function preloadSchoolLogo(customUrl = '') {
   schoolLogo = new Image();
   schoolLogo.crossOrigin = "anonymous";
   schoolLogo.onload = function() {
@@ -527,7 +528,71 @@ function preloadSchoolLogo() {
     console.warn("School logo failed to load, will use text-only watermark");
     logoLoaded = false;
   };
-  schoolLogo.src = "https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN";
+  schoolLogo.src = customUrl || "https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN";
+}
+
+function applyBrandingLogoUrl(logoUrl) {
+  if (!logoUrl) return;
+  const loginLogo = document.getElementById('login-school-logo');
+  const headerLogo = document.getElementById('school-logo');
+  const adminLogo = document.getElementById('appLogoAdminImg');
+  if (loginLogo) loginLogo.src = logoUrl;
+  if (headerLogo) headerLogo.src = logoUrl;
+  if (adminLogo) adminLogo.src = logoUrl;
+  preloadSchoolLogo(logoUrl);
+}
+
+async function loadAppBranding() {
+  try {
+    const res = await apiCall('/api/branding');
+    if (res && res.logoUrl) {
+      applyBrandingLogoUrl(res.logoUrl);
+    }
+  } catch (e) {
+    console.warn('Could not load custom branding:', e.message);
+  }
+}
+
+function handleAppLogoUpload() {
+  const input = document.getElementById('appLogoInput');
+  const btn = document.getElementById('uploadAppLogoBtn');
+  if (!input || !input.files || !input.files[0]) return;
+
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = async function() {
+      const maxDim = 512;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const logoDataUrl = canvas.toDataURL('image/png');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await apiCall('/api/branding/logo', 'POST', { logoDataUrl });
+        if (res && res.status === 'success') {
+          applyBrandingLogoUrl(res.logoUrl);
+          showCopyNotification(res.message || 'App logo updated!');
+        } else {
+          showNoticePopup((res && res.message) || 'Failed to upload logo', '', 'Error');
+        }
+      } catch (err) {
+        showNoticePopup('Error uploading logo: ' + err.message, '', 'Error');
+      } finally {
+        if (btn) btn.disabled = false;
+        input.value = '';
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function handleClassSelectChange() {
