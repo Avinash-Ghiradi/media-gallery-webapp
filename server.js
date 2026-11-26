@@ -2,9 +2,21 @@ const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const multer = require('multer');
 const config = require('./src/config');
 const auth = require('./src/auth');
 const googleService = require('./src/googleService');
+
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
+const upload = multer({
+  dest: path.join(os.tmpdir(), 'media-gallery-uploads'),
+  limits: {
+    fileSize: MAX_FILE_SIZE_BYTES,
+    files: 50
+  }
+});
 
 const app = express();
 
@@ -14,9 +26,9 @@ app.set('trust proxy', 1);
 // Enable CORS
 app.use(cors());
 
-// Body parsers with 100MB limit for high-res base64 media uploads
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+// Body parsers with 500MB limit for large media uploads
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 // Express Session configuration
 app.use(session({
@@ -95,6 +107,46 @@ app.post('/api/upload', auth.requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
   }
+});
+
+// Multipart streaming upload route supporting files up to 500MB
+app.post('/api/upload-multipart', auth.requireAuth, (req, res) => {
+  upload.array('files', 50)(req, res, async (uploadErr) => {
+    if (uploadErr) {
+      const msg = uploadErr.code === 'LIMIT_FILE_SIZE'
+        ? 'File exceeds the 500MB maximum size limit.'
+        : uploadErr.message;
+      return res.status(400).json({ status: 'error', message: msg });
+    }
+
+    const uploadedFiles = req.files || [];
+    try {
+      const { eventName, className } = req.body;
+      const addWatermark = req.body.addWatermark !== 'false';
+
+      if (uploadedFiles.length === 0) {
+        return res.status(400).json({ status: 'error', message: 'No files provided' });
+      }
+
+      const filesData = uploadedFiles.map((f) => ({
+        filename: f.originalname,
+        contentType: f.mimetype,
+        size: f.size,
+        data: fs.readFileSync(f.path).toString('base64')
+      }));
+
+      const result = await googleService.uploadFilesToDrive(filesData, eventName, className, addWatermark);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ status: 'error', message: err.message });
+    } finally {
+      uploadedFiles.forEach((f) => {
+        try {
+          if (f.path && fs.existsSync(f.path)) fs.unlinkSync(f.path);
+        } catch (e) {}
+      });
+    }
+  });
 });
 
 /* ==========================================================================
@@ -210,10 +262,14 @@ app.get('*', (req, res) => {
 });
 
 // Start Server
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log(`=================================================`);
   console.log(` Media Gallery Web App Server Running!`);
   console.log(` URL: http://localhost:${config.port}`);
   console.log(` Mode: ${googleService.isConfigured() ? 'Google Cloud Service Account' : 'Mock Service (Local Testing)'}`);
   console.log(`=================================================`);
 });
+
+// Allow up to 30 minutes for large (up to 500MB) uploads over mobile networks
+server.requestTimeout = 30 * 60 * 1000;
+server.headersTimeout = 30 * 60 * 1000;
