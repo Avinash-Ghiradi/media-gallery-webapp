@@ -58,7 +58,7 @@ function doPost(e) {
     var res;
 
     if (action === 'uploadFilesToDrive') {
-      res = uploadFilesToDrive(contents.filesData, contents.eventName, contents.className, contents.addWatermark);
+      res = uploadFilesToDrive(contents.filesData, contents.eventName, contents.className, contents.addWatermark, contents.originalFilesData);
     } else if (action === 'getAllFolders') {
       res = getAllExistingFolders();
     } else if (action === 'getSubfoldersForEvent') {
@@ -421,11 +421,48 @@ function logoutUser() {
   }
 }
 
+function saveFileToDriveFolder(targetFolder, fileData) {
+  var filename = sanitizeFilename(fileData.filename);
+  var base64Data = fileData.data;
+  if (base64Data.indexOf('base64,') !== -1) {
+    base64Data = base64Data.split('base64,')[1];
+  }
+  var contentType = fileData.contentType || 'image/jpeg';
+
+  var existingFiles = targetFolder.getFilesByName(filename);
+  if (existingFiles.hasNext()) {
+    var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+    var ext = filename.split('.').pop();
+    var baseName = filename.substring(0, filename.lastIndexOf('.'));
+    filename = baseName + '_' + timestamp + '.' + ext;
+  }
+
+  var blob = Utilities.newBlob(
+    Utilities.base64Decode(base64Data),
+    contentType,
+    filename
+  );
+  var file = targetFolder.createFile(blob);
+
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (permErr) {}
+
+  return {
+    originalName: fileData.filename,
+    savedName: filename,
+    url: file.getUrl(),
+    contentType: contentType,
+    size: file.getSize()
+  };
+}
+
 /**
- * Uploads files to Drive with organized folder structure
+ * Uploads files to Drive in separate "With Watermark" (WhatsApp) and "Without Watermark" folders
  */
-function uploadFilesToDrive(filesData, eventName, className, addWatermark) {
+function uploadFilesToDrive(filesData, eventName, className, addWatermark, originalFilesData) {
   if (addWatermark === undefined) addWatermark = true;
+  if (!originalFilesData) originalFilesData = [];
   
   try {
     if (!filesData || !filesData.length) throw new Error('No files provided');
@@ -450,61 +487,34 @@ function uploadFilesToDrive(filesData, eventName, className, addWatermark) {
     
     var fileUrls = [];
     
-    // 1. Get or create EVENT folder
+    // 1. Get or create EVENT folder & CLASS subfolder
     var eventFolder = getOrCreateFolder(rootFolder, eventName);
-    
-    // 2. Get or create CLASS subfolder
     var classSubfolder = getOrCreateFolder(eventFolder, className);
+
+    // 2. Create separate "With Watermark" (for WhatsApp) and "Without Watermark" folders
+    var withWatermarkFolder = addWatermark ? getOrCreateFolder(classSubfolder, 'With Watermark') : null;
+    var withoutWatermarkFolder = getOrCreateFolder(classSubfolder, 'Without Watermark');
+    var primaryTargetFolder = withWatermarkFolder || withoutWatermarkFolder;
     
-    // 3. Process each file
+    // 3. Save watermarked files (or unwatermarked when toggle is OFF)
     filesData.forEach(function(fileData, index) {
       try {
-        var filename = sanitizeFilename(fileData.filename);
-        var base64Data = fileData.data;
-        if (base64Data.indexOf('base64,') !== -1) {
-          base64Data = base64Data.split('base64,')[1];
-        }
-        var contentType = fileData.contentType || 'image/jpeg';
-        
-        var existingFiles = classSubfolder.getFilesByName(filename);
-        if (existingFiles.hasNext()) {
-          var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
-          var ext = filename.split('.').pop();
-          var baseName = filename.substring(0, filename.lastIndexOf('.'));
-          filename = baseName + '_' + timestamp + '.' + ext;
-        }
-        
-        var blob = Utilities.newBlob(
-          Utilities.base64Decode(base64Data), 
-          contentType, 
-          filename
-        );
-        var file = classSubfolder.createFile(blob);
-        
-        // Ensure "Anyone with the link can view" permission
-        try {
-          file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        } catch (permErr) {
-          console.warn('Set sharing warning:', permErr);
-        }
-        
-        var fileUrl = file.getUrl();
+        var saved = saveFileToDriveFolder(primaryTargetFolder, fileData);
         fileUrls.push({
-          originalName: fileData.filename,
-          savedName: filename,
-          url: fileUrl
+          originalName: saved.originalName,
+          savedName: saved.savedName,
+          url: saved.url
         });
         
         sheet.appendRow([
           eventName, 
           className, 
-          filename, 
-          fileUrl, 
+          saved.savedName, 
+          saved.url, 
           new Date(),
-          contentType,
-          file.getSize()
+          saved.contentType,
+          saved.size
         ]);
-        
       } catch (e) {
         console.error('Error uploading file #' + (index + 1) + ': ' + fileData.filename, e);
         fileUrls.push({
@@ -513,16 +523,34 @@ function uploadFilesToDrive(filesData, eventName, className, addWatermark) {
         });
       }
     });
+
+    // 4. Save original unwatermarked copies into "Without Watermark" folder
+    if (addWatermark && originalFilesData.length > 0) {
+      originalFilesData.forEach(function(origData, index) {
+        try {
+          saveFileToDriveFolder(withoutWatermarkFolder, origData);
+        } catch (origErr) {
+          console.error('Error uploading original file #' + (index + 1) + ': ' + origData.filename, origErr);
+        }
+      });
+    }
+
+    var withWatermarkFolderUrl = withWatermarkFolder ? withWatermarkFolder.getUrl() : '';
+    var withoutWatermarkFolderUrl = withoutWatermarkFolder.getUrl();
+    var shareFolderUrl = withWatermarkFolderUrl || withoutWatermarkFolderUrl;
     
-    updateSheet2(sheet2, eventName, className, classSubfolder.getUrl(), fileUrls);
+    updateSheet2(sheet2, eventName, className, shareFolderUrl, fileUrls);
     updateAdditionalSheet(dataSheet, eventName, fileUrls);
     
     return {
       status: 'success',
-      message: filesData.length + ' file(s) processed ' + 
-               (addWatermark ? 'WITH watermark' : 'WITHOUT watermark'),
+      message: addWatermark
+        ? filesData.length + ' file(s) saved to both "With Watermark" (WhatsApp) and "Without Watermark" folders'
+        : filesData.length + ' file(s) saved to "Without Watermark" folder',
       urls: fileUrls,
-      folderUrl: classSubfolder.getUrl(),
+      folderUrl: shareFolderUrl,
+      withWatermarkFolderUrl: withWatermarkFolderUrl,
+      withoutWatermarkFolderUrl: withoutWatermarkFolderUrl,
       watermarkApplied: addWatermark
     };
     
