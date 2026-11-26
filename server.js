@@ -271,11 +271,11 @@ app.get('/api/users', auth.requireAdmin, async (req, res) => {
 
 app.post('/api/users', auth.requireAdmin, async (req, res) => {
   try {
-    const { username, password, assignedClass, details } = req.body;
+    const { username, password, assignedClass, details, photoUrl, originalUsername } = req.body;
     if (!username || !password) {
       return res.status(400).json({ status: 'error', message: 'Username and password are required' });
     }
-    const result = await googleService.addOrUpdateUser(username, password, assignedClass, details);
+    const result = await googleService.addOrUpdateUser(username, password, assignedClass, details, photoUrl, originalUsername);
     res.json(result);
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
