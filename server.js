@@ -57,11 +57,11 @@ app.get('/api/auth/status', (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { password } = req.body;
+  const { username, password } = req.body;
   if (!password) {
     return res.status(400).json({ status: 'error', message: 'Password is required' });
   }
-  const result = await auth.authenticateUser(req, password);
+  const result = await auth.authenticateUser(req, password, username);
   if (result.status === 'success') {
     return req.session.save((err) => {
       if (err) console.error('Session save error:', err);
