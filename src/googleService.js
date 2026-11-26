@@ -975,12 +975,180 @@ function sanitizeFilename(name) {
   return name.replace(/[\/\\?%*:|"<>]/g, '-').trim();
 }
 
+async function ensureUsersSheetExists(sheets) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: config.usersSheetId });
+  const exists = (meta.data.sheets || []).some(
+    (s) => s.properties && s.properties.title === config.usersSheetName
+  );
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: config.usersSheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: config.usersSheetName } } }]
+      }
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A1:D3`,
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [
+          ['Username', 'Password', 'Class', 'Role / Details'],
+          ['admin', 'password123', '', 'Administrator'],
+          ['Avinash', 'Avinash123', '', 'Administrator']
+        ]
+      }
+    });
+  }
+}
+
+async function getUsersListForAdmin() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getUsersListForAdmin');
+      if (res && res.status === 'success') return res;
+    } catch (e) {
+      console.error('GAS getUsersListForAdmin error:', e.message);
+    }
+  }
+
+  const sheets = getSheetsClient();
+  if (!sheets) return mockService.getUsersListForAdmin();
+
+  try {
+    await ensureUsersSheetExists(sheets);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:D`
+    });
+    const rows = response.data.values || [];
+    const startRow = rows[0] && rows[0][0] && rows[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
+    const list = [];
+    for (let i = startRow; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] && row[1]) {
+        list.push({
+          username: row[0].toString().trim(),
+          password: row[1].toString().trim(),
+          assignedClass: row[2] ? row[2].toString().trim() : '',
+          details: row[3] ? row[3].toString().trim() : ''
+        });
+      }
+    }
+    return { status: 'success', data: list };
+  } catch (e) {
+    console.error('Error getting users list:', e.message);
+    return mockService.getUsersListForAdmin();
+  }
+}
+
+async function addOrUpdateUser(username, password, assignedClass = '', details = '') {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('addOrUpdateUser', {
+        username,
+        password,
+        assignedClass,
+        details
+      });
+      if (res && res.status) return res;
+    } catch (e) {
+      console.error('GAS addOrUpdateUser error:', e.message);
+    }
+  }
+
+  const sheets = getSheetsClient();
+  if (!sheets) return mockService.addOrUpdateUser(username, password, assignedClass, details);
+
+  try {
+    await ensureUsersSheetExists(sheets);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:D`
+    });
+    const rows = response.data.values || [];
+    const cleanUser = username.toString().trim();
+    const cleanPass = password.toString().trim();
+    const cleanClass = (assignedClass || '').toString().trim();
+    const cleanDetails = (details || '').toString().trim();
+
+    let matchRow = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] && rows[i][0].toString().trim().toLowerCase() === cleanUser.toLowerCase()) {
+        matchRow = i + 1;
+        break;
+      }
+    }
+
+    if (matchRow !== -1) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: config.usersSheetId,
+        range: `${config.usersSheetName}!A${matchRow}:D${matchRow}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[cleanUser, cleanPass, cleanClass, cleanDetails]] }
+      });
+      return { status: 'success', message: `User "${cleanUser}" updated in Google Sheet.` };
+    }
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:D`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [[cleanUser, cleanPass, cleanClass, cleanDetails]] }
+    });
+    return { status: 'success', message: `User "${cleanUser}" added to Google Sheet.` };
+  } catch (e) {
+    return { status: 'error', message: 'Failed to save user: ' + e.message };
+  }
+}
+
+async function deleteUser(username) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('deleteUser', { username });
+      if (res && res.status) return res;
+    } catch (e) {
+      console.error('GAS deleteUser error:', e.message);
+    }
+  }
+
+  const sheets = getSheetsClient();
+  if (!sheets) return mockService.deleteUser(username);
+
+  try {
+    await ensureUsersSheetExists(sheets);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:D`
+    });
+    const rows = response.data.values || [];
+    const cleanUser = username.toString().trim().toLowerCase();
+    const filtered = rows.filter((row, idx) => idx === 0 || !(row[0] && row[0].toString().trim().toLowerCase() === cleanUser));
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:D`
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A1`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: filtered }
+    });
+    return { status: 'success', message: `User "${username}" deleted.` };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
 module.exports = {
   isConfigured: () => {
     initGoogleAuth();
     return isGoogleApiConfigured || !!config.gasWebAppUrl;
   },
   getUsersFromSheet,
+  getUsersListForAdmin,
+  addOrUpdateUser,
+  deleteUser,
   getAllFolders,
   getSubfoldersForEvent,
   uploadFilesToDrive,
