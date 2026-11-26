@@ -141,7 +141,7 @@ async function checkAuthentication() {
   try {
     const authStatus = await apiCall('/api/auth/status');
     if (authStatus && authStatus.isAuthenticated) {
-      showMainApp(authStatus.username, authStatus.googleConfigured, authStatus.assignedClass || '', authStatus.photoUrl || '');
+      showMainApp(authStatus.username, authStatus.googleConfigured, authStatus.assignedClass || '', authStatus.photoUrl || '', authStatus.fullName || '');
     } else {
       showLogin();
     }
@@ -194,10 +194,11 @@ function applyAssignedClassLock() {
   }
 }
 
-function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '') {
+function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '', fullName = '') {
   currentUserAssignedClass = assignedClass || '';
+  const displayName = fullName || username || 'Admin';
   const classNote = currentUserAssignedClass ? ` (${currentUserAssignedClass})` : '';
-  document.getElementById('user-name').textContent = 'Welcome, ' + (username || 'Admin') + classNote;
+  document.getElementById('user-name').textContent = 'Welcome, ' + displayName + classNote;
   const headerAvatar = document.getElementById('headerUserAvatar');
   if (headerAvatar) {
     headerAvatar.innerHTML = photoUrl
@@ -1961,10 +1962,12 @@ function editUserFromAdmin(index) {
 
   const titleEl = document.getElementById('userFormTitle');
   const cancelBtn = document.getElementById('cancelEditUserBtn');
-  if (titleEl) titleEl.textContent = `Edit User: ${user.username}`;
+  if (titleEl) titleEl.textContent = `Edit User: ${user.fullName || user.username}`;
   if (cancelBtn) cancelBtn.style.display = 'inline-flex';
 
   document.getElementById('newUserUsername').value = user.username;
+  const fullNameEl = document.getElementById('newUserFullName');
+  if (fullNameEl) fullNameEl.value = user.fullName || '';
   document.getElementById('newUserPassword').value = user.password;
   setSelectOrCustomValue('newUserClass', 'newUserClassCustom', user.assignedClass || '');
   setSelectOrCustomValue('newUserDetails', 'newUserDetailsCustom', user.details || '');
@@ -1983,6 +1986,8 @@ function resetUserForm() {
   if (cancelBtn) cancelBtn.style.display = 'none';
 
   document.getElementById('newUserUsername').value = '';
+  const fullNameEl = document.getElementById('newUserFullName');
+  if (fullNameEl) fullNameEl.value = '';
   document.getElementById('newUserPassword').value = '';
   setSelectOrCustomValue('newUserClass', 'newUserClassCustom', '');
   setSelectOrCustomValue('newUserDetails', 'newUserDetailsCustom', '');
@@ -2009,8 +2014,9 @@ async function loadUsersForAdmin() {
       users.forEach((u, index) => {
         const badgeText = u.assignedClass ? `Class: ${u.assignedClass}` : 'Admin (All Classes)';
         const safeUser = u.username.replace(/'/g, "\\'");
+        const displayName = u.fullName ? `${u.fullName}` : u.username;
         const avatarHtml = u.photoUrl
-          ? `<img src="${u.photoUrl}" alt="${u.username}">`
+          ? `<img src="${u.photoUrl}" alt="${displayName}">`
           : '<i class="fas fa-user"></i>';
 
         html += `
@@ -2019,11 +2025,11 @@ async function loadUsersForAdmin() {
               <div class="user-list-avatar">${avatarHtml}</div>
               <div class="user-row-info">
                 <div class="user-row-name">
-                  <span>${u.username}</span>
+                  <span>${displayName}</span>
                   <span class="assigned-class-badge">${badgeText}</span>
                 </div>
                 <div class="user-row-meta">
-                  Password: <strong>${u.password}</strong>${u.details ? ` • ${u.details}` : ''}
+                  Mobile/ID: <strong>${u.username}</strong> • Password: <strong>${u.password}</strong>${u.details ? ` • ${u.details}` : ''}
                 </div>
               </div>
             </div>
@@ -2050,6 +2056,7 @@ async function loadUsersForAdmin() {
 
 async function saveUserFromAdmin() {
   const usernameEl = document.getElementById('newUserUsername');
+  const fullNameEl = document.getElementById('newUserFullName');
   const passwordEl = document.getElementById('newUserPassword');
   const classEl = document.getElementById('newUserClass');
   const classCustomEl = document.getElementById('newUserClassCustom');
@@ -2058,6 +2065,7 @@ async function saveUserFromAdmin() {
   const saveBtn = document.getElementById('saveUserBtn');
 
   const username = usernameEl ? usernameEl.value.trim() : '';
+  const fullName = fullNameEl ? fullNameEl.value.trim() : '';
   const password = passwordEl ? passwordEl.value.trim() : '';
   const assignedClass = classEl
     ? (classEl.value === '__custom__' ? (classCustomEl ? classCustomEl.value.trim() : '') : classEl.value.trim())
@@ -2067,7 +2075,7 @@ async function saveUserFromAdmin() {
     : '';
 
   if (!username) {
-    showNoticePopup('Please enter a username', 'newUserUsername');
+    showNoticePopup('Please enter a mobile number or username', 'newUserUsername');
     return;
   }
   if (!password) {
@@ -2079,6 +2087,7 @@ async function saveUserFromAdmin() {
   try {
     const res = await apiCall('/api/users', 'POST', {
       username,
+      fullName,
       password,
       assignedClass,
       details,
