@@ -141,7 +141,7 @@ async function checkAuthentication() {
   try {
     const authStatus = await apiCall('/api/auth/status');
     if (authStatus && authStatus.isAuthenticated) {
-      showMainApp(authStatus.username, authStatus.googleConfigured, authStatus.assignedClass || '');
+      showMainApp(authStatus.username, authStatus.googleConfigured, authStatus.assignedClass || '', authStatus.photoUrl || '');
     } else {
       showLogin();
     }
@@ -194,10 +194,16 @@ function applyAssignedClassLock() {
   }
 }
 
-function showMainApp(username, googleConfigured, assignedClass = '') {
+function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '') {
   currentUserAssignedClass = assignedClass || '';
   const classNote = currentUserAssignedClass ? ` (${currentUserAssignedClass})` : '';
   document.getElementById('user-name').textContent = 'Welcome, ' + (username || 'Admin') + classNote;
+  const headerAvatar = document.getElementById('headerUserAvatar');
+  if (headerAvatar) {
+    headerAvatar.innerHTML = photoUrl
+      ? `<img src="${photoUrl}" alt="${username}" class="user-avatar-img">`
+      : '<i class="fas fa-user-shield"></i>';
+  }
   document.getElementById('mainApp').style.display = 'block';
   document.getElementById('loginOverlay').style.display = 'none';
   const usersNavBtn = document.getElementById('usersNavBtn');
@@ -1844,6 +1850,96 @@ function openWhatsApp() {
    ADMIN USER MANAGEMENT
    ========================================================================== */
 
+let adminUsersCache = [];
+let editingOriginalUsername = '';
+let pendingUserPhotoData = '';
+
+function updateUserPhotoPreview(src) {
+  const preview = document.getElementById('userPhotoPreview');
+  const removeBtn = document.getElementById('removeUserPhotoBtn');
+  if (!preview) return;
+
+  if (src) {
+    preview.innerHTML = `<img src="${src}" alt="Profile Photo">`;
+    if (removeBtn) removeBtn.style.display = 'inline-flex';
+  } else {
+    preview.innerHTML = '<i class="fas fa-user"></i>';
+    if (removeBtn) removeBtn.style.display = 'none';
+  }
+}
+
+function clearUserPhoto() {
+  pendingUserPhotoData = '';
+  const input = document.getElementById('newUserPhotoInput');
+  if (input) input.value = '';
+  updateUserPhotoPreview('');
+}
+
+function handleUserPhotoSelect() {
+  const input = document.getElementById('newUserPhotoInput');
+  if (!input || !input.files || !input.files[0]) return;
+
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const size = 200;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      const minSide = Math.min(img.width, img.height);
+      const sx = (img.width - minSide) / 2;
+      const sy = (img.height - minSide) / 2;
+      ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+
+      pendingUserPhotoData = canvas.toDataURL('image/jpeg', 0.8);
+      updateUserPhotoPreview(pendingUserPhotoData);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function editUserFromAdmin(index) {
+  const user = adminUsersCache[index];
+  if (!user) return;
+
+  editingOriginalUsername = user.username;
+  pendingUserPhotoData = user.photoUrl || '';
+
+  const titleEl = document.getElementById('userFormTitle');
+  const cancelBtn = document.getElementById('cancelEditUserBtn');
+  if (titleEl) titleEl.textContent = `Edit User: ${user.username}`;
+  if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+
+  document.getElementById('newUserUsername').value = user.username;
+  document.getElementById('newUserPassword').value = user.password;
+  document.getElementById('newUserClass').value = user.assignedClass || '';
+  document.getElementById('newUserDetails').value = user.details || '';
+  updateUserPhotoPreview(pendingUserPhotoData);
+
+  const card = document.getElementById('userEditorCard');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetUserForm() {
+  editingOriginalUsername = '';
+  pendingUserPhotoData = '';
+  const titleEl = document.getElementById('userFormTitle');
+  const cancelBtn = document.getElementById('cancelEditUserBtn');
+  if (titleEl) titleEl.textContent = 'Add or Update User';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+
+  document.getElementById('newUserUsername').value = '';
+  document.getElementById('newUserPassword').value = '';
+  document.getElementById('newUserClass').value = '';
+  document.getElementById('newUserDetails').value = '';
+  clearUserPhoto();
+}
+
 async function loadUsersForAdmin() {
   const container = document.getElementById('usersListContainer');
   if (!container) return;
@@ -1854,29 +1950,42 @@ async function loadUsersForAdmin() {
     const res = await apiCall('/api/users');
     if (res && res.status === 'success') {
       const users = res.data || [];
+      adminUsersCache = users;
       if (users.length === 0) {
         container.innerHTML = '<div class="empty-state"><p>No users found in sheet.</p></div>';
         return;
       }
 
       let html = '<div class="users-list">';
-      users.forEach((u) => {
+      users.forEach((u, index) => {
         const badgeText = u.assignedClass ? `Class: ${u.assignedClass}` : 'Admin (All Classes)';
         const safeUser = u.username.replace(/'/g, "\\'");
+        const avatarHtml = u.photoUrl
+          ? `<img src="${u.photoUrl}" alt="${u.username}">`
+          : '<i class="fas fa-user"></i>';
+
         html += `
           <div class="user-row-card">
-            <div class="user-row-info">
-              <div class="user-row-name">
-                <span>${u.username}</span>
-                <span class="assigned-class-badge">${badgeText}</span>
-              </div>
-              <div class="user-row-meta">
-                Password: <strong>${u.password}</strong>${u.details ? ` • ${u.details}` : ''}
+            <div class="user-row-left">
+              <div class="user-list-avatar">${avatarHtml}</div>
+              <div class="user-row-info">
+                <div class="user-row-name">
+                  <span>${u.username}</span>
+                  <span class="assigned-class-badge">${badgeText}</span>
+                </div>
+                <div class="user-row-meta">
+                  Password: <strong>${u.password}</strong>${u.details ? ` • ${u.details}` : ''}
+                </div>
               </div>
             </div>
-            <button type="button" class="delete-class-btn" onclick="deleteUserFromAdmin('${safeUser}')">
-              <i class="fas fa-trash-alt"></i> Remove
-            </button>
+            <div class="user-row-actions">
+              <button type="button" class="edit-user-btn" onclick="editUserFromAdmin(${index})">
+                <i class="fas fa-edit"></i> Edit
+              </button>
+              <button type="button" class="delete-class-btn" onclick="deleteUserFromAdmin('${safeUser}')">
+                <i class="fas fa-trash-alt"></i> Remove
+              </button>
+            </div>
           </div>
         `;
       });
@@ -1913,13 +2022,17 @@ async function saveUserFromAdmin() {
 
   if (saveBtn) saveBtn.disabled = true;
   try {
-    const res = await apiCall('/api/users', 'POST', { username, password, assignedClass, details });
+    const res = await apiCall('/api/users', 'POST', {
+      username,
+      password,
+      assignedClass,
+      details,
+      photoUrl: pendingUserPhotoData,
+      originalUsername: editingOriginalUsername
+    });
     if (res && res.status === 'success') {
       showCopyNotification(res.message || 'User saved!');
-      if (usernameEl) usernameEl.value = '';
-      if (passwordEl) passwordEl.value = '';
-      if (classEl) classEl.value = '';
-      if (detailsEl) detailsEl.value = '';
+      resetUserForm();
       loadUsersForAdmin();
     } else {
       showNoticePopup((res && res.message) || 'Failed to save user', '', 'Error');
