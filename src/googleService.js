@@ -247,10 +247,7 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     }
   }
 
-  const drive = getDriveClient();
-  const sheets = getSheetsClient();
-
-  if ((!drive || !sheets) && config.gasWebAppUrl) {
+  if (config.gasWebAppUrl) {
     try {
       console.log('Forwarding upload to Google Apps Script Web App URL:', config.gasWebAppUrl);
       if (addWatermark && originalsList.length > 0) {
@@ -285,6 +282,9 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
       console.error('Error forwarding to GAS WebApp URL:', e.message);
     }
   }
+
+  const drive = getDriveClient();
+  const sheets = getSheetsClient();
 
   if (!drive || !sheets) {
     return mockService.uploadFilesToDrive(filesData, eventName, className, addWatermark, originalsList);
@@ -743,19 +743,18 @@ async function getRecentUploads() {
 }
 
 async function getAllEventsForDeletion() {
-  const drive = getDriveClient();
-  if (!drive) {
-    if (config.gasWebAppUrl) {
-      try {
-        const res = await callGasBridge('getAllEventsForDeletion');
-        if (res && res.status === 'success') return res;
-        if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
-      } catch (e) {
-        console.error('GAS getAllEventsForDeletion error:', e.message);
-      }
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getAllEventsForDeletion');
+      if (res && res.status === 'success') return res;
+      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+    } catch (e) {
+      console.error('GAS getAllEventsForDeletion error:', e.message);
     }
-    return mockService.getAllEventsForDeletion();
   }
+
+  const drive = getDriveClient();
+  if (!drive) return mockService.getAllEventsForDeletion();
 
   try {
     const eventRes = await drive.files.list({
