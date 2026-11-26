@@ -569,8 +569,35 @@ async function loadAppBranding() {
     if (res && (res.photoLogoUrl || res.logoUrl)) {
       applyPhotoWatermarkLogoUrl(res.photoLogoUrl || res.logoUrl);
     }
+    const appLinkEl = document.getElementById('appLogoLinkInput');
+    const photoLinkEl = document.getElementById('photoLogoLinkInput');
+    if (appLinkEl && res && res.savedAppLogoLink) appLinkEl.value = res.savedAppLogoLink;
+    if (photoLinkEl && res && res.savedPhotoLogoLink) photoLinkEl.value = res.savedPhotoLogoLink;
   } catch (e) {
     console.warn('Could not load custom branding:', e.message);
+  }
+}
+
+async function saveBrandingLink(kind) {
+  const isPhoto = kind === 'photo';
+  const input = document.getElementById(isPhoto ? 'photoLogoLinkInput' : 'appLogoLinkInput');
+  const link = input ? input.value.trim() : '';
+  if (!link || !link.startsWith('http')) {
+    showNoticePopup('Please enter a valid image URL starting with http/https.', '', 'Invalid Link');
+    return;
+  }
+  const endpoint = isPhoto ? '/api/branding/photo-logo' : '/api/branding/logo';
+  try {
+    const res = await apiCall(endpoint, 'POST', { logoLink: link });
+    if (res && res.status === 'success') {
+      if (isPhoto) applyPhotoWatermarkLogoUrl(res.photoLogoUrl);
+      else applyBrandingLogoUrl(res.logoUrl);
+      showCopyNotification(res.message || 'Logo link saved!');
+    } else {
+      showNoticePopup((res && res.message) || 'Failed to save logo link', '', 'Error');
+    }
+  } catch (err) {
+    showNoticePopup('Error saving logo link: ' + err.message, '', 'Error');
   }
 }
 
@@ -618,12 +645,16 @@ function uploadLogoToEndpoint(inputId, btnId, maxDim, endpoint, onSuccessUrl) {
 function handleAppLogoUpload() {
   uploadLogoToEndpoint('appLogoInput', 'uploadAppLogoBtn', 512, '/api/branding/logo', (res) => {
     applyBrandingLogoUrl(res.logoUrl);
+    const appLinkEl = document.getElementById('appLogoLinkInput');
+    if (appLinkEl && res.savedAppLogoLink) appLinkEl.value = res.savedAppLogoLink;
   });
 }
 
 function handlePhotoLogoUpload() {
   uploadLogoToEndpoint('photoLogoInput', 'uploadPhotoLogoBtn', 800, '/api/branding/photo-logo', (res) => {
     applyPhotoWatermarkLogoUrl(res.photoLogoUrl);
+    const photoLinkEl = document.getElementById('photoLogoLinkInput');
+    if (photoLinkEl && res.savedPhotoLogoLink) photoLinkEl.value = res.savedPhotoLogoLink;
   });
 }
 
