@@ -44,6 +44,40 @@ app.use(session({
   }
 }));
 
+// Dynamic PWA manifest (so updated app logo icon URLs bust browser cache)
+const CUSTOM_PUBLIC_LOGO = path.join(__dirname, 'public', 'custom-logo.png');
+app.get('/manifest.json', (req, res) => {
+  let version = '1';
+  if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
+    version = String(Math.floor(fs.statSync(CUSTOM_PUBLIC_LOGO).mtimeMs));
+  }
+  res.json({
+    name: 'Success Gallery',
+    short_name: 'Success Gallery',
+    description: 'Success Gallery — Digital Media Gallery for Success School Indi',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#f8fafc',
+    theme_color: '#4f46e5',
+    orientation: 'any',
+    icons: [
+      {
+        src: `/icons/icon-192.png?v=${version}`,
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any maskable'
+      },
+      {
+        src: `/icons/icon-512.png?v=${version}`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any maskable'
+      }
+    ]
+  });
+});
+
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -328,7 +362,6 @@ app.post('/api/users/apply-default-password', auth.requireAdmin, async (req, res
    ========================================================================== */
 
 const DEFAULT_LOGO_URL = 'https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN';
-const CUSTOM_PUBLIC_LOGO = path.join(__dirname, 'public', 'custom-logo.png');
 const SERVER_WATERMARK_LOGO = path.join(__dirname, 'src', 'school_logo.png');
 
 app.get('/api/branding', (req, res) => {
@@ -344,7 +377,38 @@ app.get('/api/branding', (req, res) => {
   });
 });
 
-app.post('/api/branding/logo', auth.requireAdmin, (req, res) => {
+async function regeneratePwaIconsFromBuffer(buf) {
+  try {
+    const { createCanvas, loadImage } = require('canvas');
+    const iconsDir = path.join(__dirname, 'public', 'icons');
+    fs.mkdirSync(iconsDir, { recursive: true });
+    const img = await loadImage(buf);
+    for (const size of [192, 512]) {
+      const canvas = createCanvas(size, size);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#4f46e5';
+      ctx.fillRect(0, 0, size, size);
+      const pad = Math.round(size * 0.12);
+      const maxBox = size - pad * 2;
+      const scale = Math.min(maxBox / img.width, maxBox / img.height);
+      const drawW = Math.max(1, Math.round(img.width * scale));
+      const drawH = Math.max(1, Math.round(img.height * scale));
+      const x = Math.round((size - drawW) / 2);
+      const y = Math.round((size - drawH) / 2);
+      ctx.fillStyle = '#ffffff';
+      const r = Math.round(size * 0.1);
+      ctx.beginPath();
+      ctx.roundRect(pad - 6, pad - 6, maxBox + 12, maxBox + 12, r);
+      ctx.fill();
+      ctx.drawImage(img, x, y, drawW, drawH);
+      fs.writeFileSync(path.join(iconsDir, `icon-${size}.png`), canvas.toBuffer('image/png'));
+    }
+  } catch (e) {
+    console.warn('Could not regenerate PWA icons:', e.message);
+  }
+}
+
+app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
   try {
     const { logoDataUrl } = req.body;
     if (!logoDataUrl || typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
@@ -358,11 +422,12 @@ app.post('/api/branding/logo', auth.requireAdmin, (req, res) => {
     fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
     fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
     videoWatermark.reloadLogo();
+    await regeneratePwaIconsFromBuffer(buf);
 
     const logoUrl = `/custom-logo.png?v=${Date.now()}`;
     res.json({
       status: 'success',
-      message: 'App logo updated! Applied to header, login & watermarks.',
+      message: 'App logo & install icon updated! Reinstall or refresh app to see the new icon.',
       logoUrl
     });
   } catch (err) {
