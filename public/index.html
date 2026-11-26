@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <base href="/">
-  <title>Success School Indi — Media Gallery</title>
+  <title>Success Gallery</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#312e81">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Media Gallery">
+  <meta name="apple-mobile-web-app-title" content="Success Gallery">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/png" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -27,8 +27,8 @@
             <i class="fas fa-graduation-cap"></i>
           </div>
         </div>
-        <div class="school-name">SUCCESS SCHOOL INDI</div>
-        <div class="school-tagline">Digital Media Gallery</div>
+        <div class="school-name">Success Gallery</div>
+        <div class="school-tagline">SUCCESS SCHOOL INDI</div>
       </div>
 
       <div class="login-content">
@@ -77,8 +77,8 @@
           <i class="fas fa-graduation-cap"></i>
         </div>
         <div class="school-info">
-          <div class="school-name">SUCCESS SCHOOL INDI</div>
-          <div class="school-tagline">Digital Media Gallery</div>
+          <div class="school-name">Success Gallery</div>
+          <div class="school-tagline">SUCCESS SCHOOL INDI</div>
         </div>
       </div>
 
@@ -418,8 +418,24 @@
       <div id="usersTab" class="tab-content">
         <div class="content">
           <div class="page-heading">
-            <h1><i class="fas fa-users-cog"></i> User Management</h1>
-            <p class="page-subtitle">Add teachers &amp; admins and assign their auto-selected class folder in Google Sheet</p>
+            <h1><i class="fas fa-users-cog"></i> User Management &amp; App Branding</h1>
+            <p class="page-subtitle">Manage app logo, teachers &amp; admins in Google Sheet</p>
+          </div>
+
+          <div class="card" id="appBrandingCard">
+            <div class="card-title"><i class="fas fa-image"></i> App Logo (Success Gallery)</div>
+            <div class="user-photo-picker">
+              <div class="user-photo-preview" id="appLogoAdminPreview" style="border-radius: var(--radius-sm); width: 84px; height: 64px; background: var(--white);">
+                <img id="appLogoAdminImg" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="App Logo" style="object-fit: contain; padding: 4px;">
+              </div>
+              <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start;">
+                <button type="button" class="btn-primary" id="uploadAppLogoBtn" onclick="document.getElementById('appLogoInput').click()">
+                  <i class="fas fa-upload"></i> Upload New App Logo
+                </button>
+                <div class="toggle-description">Updates Header, Login Screen, and Photo/Video Watermarks</div>
+                <input type="file" id="appLogoInput" accept="image/*" onchange="handleAppLogoUpload()" style="display: none;">
+              </div>
+            </div>
           </div>
 
           <div class="card" id="userEditorCard">
