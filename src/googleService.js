@@ -119,7 +119,7 @@ async function getUsersFromSheet() {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.usersSheetId,
-      range: `${config.usersSheetName}!A:C`
+      range: `${config.usersSheetName}!A:E`
     });
 
     const rows = response.data.values;
@@ -136,7 +136,9 @@ async function getUsersFromSheet() {
         const uname = row[0].toString().trim();
         const pwd = row[1].toString().trim();
         const assignedClass = row[2] ? row[2].toString().trim() : '';
-        users[uname] = { password: pwd, assignedClass };
+        const details = row[3] ? row[3].toString().trim() : '';
+        const photoUrl = row[4] ? row[4].toString().trim() : '';
+        users[uname] = { password: pwd, assignedClass, details, photoUrl };
       }
     }
     return users;
@@ -989,13 +991,13 @@ async function ensureUsersSheetExists(sheets) {
     });
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.usersSheetId,
-      range: `${config.usersSheetName}!A1:D3`,
+      range: `${config.usersSheetName}!A1:E3`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [
-          ['Username', 'Password', 'Class', 'Role / Details'],
-          ['admin', 'password123', '', 'Administrator'],
-          ['Avinash', 'Avinash123', '', 'Administrator']
+          ['Username', 'Password', 'Class', 'Role / Details', 'Profile Photo'],
+          ['admin', 'password123', '', 'Administrator', ''],
+          ['Avinash', 'Avinash123', '', 'Administrator', '']
         ]
       }
     });
@@ -1019,7 +1021,7 @@ async function getUsersListForAdmin() {
     await ensureUsersSheetExists(sheets);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.usersSheetId,
-      range: `${config.usersSheetName}!A:D`
+      range: `${config.usersSheetName}!A:E`
     });
     const rows = response.data.values || [];
     const startRow = rows[0] && rows[0][0] && rows[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
@@ -1031,7 +1033,8 @@ async function getUsersListForAdmin() {
           username: row[0].toString().trim(),
           password: row[1].toString().trim(),
           assignedClass: row[2] ? row[2].toString().trim() : '',
-          details: row[3] ? row[3].toString().trim() : ''
+          details: row[3] ? row[3].toString().trim() : '',
+          photoUrl: row[4] ? row[4].toString().trim() : ''
         });
       }
     }
@@ -1042,14 +1045,16 @@ async function getUsersListForAdmin() {
   }
 }
 
-async function addOrUpdateUser(username, password, assignedClass = '', details = '') {
+async function addOrUpdateUser(username, password, assignedClass = '', details = '', photoUrl = '', originalUsername = '') {
   if (config.gasWebAppUrl) {
     try {
       const res = await callGasBridge('addOrUpdateUser', {
         username,
         password,
         assignedClass,
-        details
+        details,
+        photoUrl,
+        originalUsername
       });
       if (res && res.status) return res;
     } catch (e) {
@@ -1058,23 +1063,25 @@ async function addOrUpdateUser(username, password, assignedClass = '', details =
   }
 
   const sheets = getSheetsClient();
-  if (!sheets) return mockService.addOrUpdateUser(username, password, assignedClass, details);
+  if (!sheets) return mockService.addOrUpdateUser(username, password, assignedClass, details, photoUrl, originalUsername);
 
   try {
     await ensureUsersSheetExists(sheets);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.usersSheetId,
-      range: `${config.usersSheetName}!A:D`
+      range: `${config.usersSheetName}!A:E`
     });
     const rows = response.data.values || [];
     const cleanUser = username.toString().trim();
     const cleanPass = password.toString().trim();
     const cleanClass = (assignedClass || '').toString().trim();
     const cleanDetails = (details || '').toString().trim();
+    const cleanPhoto = (photoUrl || '').toString().trim();
+    const lookup = (originalUsername || cleanUser).toString().trim().toLowerCase();
 
     let matchRow = -1;
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] && rows[i][0].toString().trim().toLowerCase() === cleanUser.toLowerCase()) {
+      if (rows[i][0] && rows[i][0].toString().trim().toLowerCase() === lookup) {
         matchRow = i + 1;
         break;
       }
@@ -1083,18 +1090,18 @@ async function addOrUpdateUser(username, password, assignedClass = '', details =
     if (matchRow !== -1) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: config.usersSheetId,
-        range: `${config.usersSheetName}!A${matchRow}:D${matchRow}`,
+        range: `${config.usersSheetName}!A${matchRow}:E${matchRow}`,
         valueInputOption: 'USER_ENTERED',
-        resource: { values: [[cleanUser, cleanPass, cleanClass, cleanDetails]] }
+        resource: { values: [[cleanUser, cleanPass, cleanClass, cleanDetails, cleanPhoto]] }
       });
       return { status: 'success', message: `User "${cleanUser}" updated in Google Sheet.` };
     }
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: config.usersSheetId,
-      range: `${config.usersSheetName}!A:D`,
+      range: `${config.usersSheetName}!A:E`,
       valueInputOption: 'USER_ENTERED',
-      resource: { values: [[cleanUser, cleanPass, cleanClass, cleanDetails]] }
+      resource: { values: [[cleanUser, cleanPass, cleanClass, cleanDetails, cleanPhoto]] }
     });
     return { status: 'success', message: `User "${cleanUser}" added to Google Sheet.` };
   } catch (e) {
