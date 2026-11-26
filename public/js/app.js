@@ -1454,7 +1454,7 @@ function handleLiveDeviceMotion(e) {
   const ay = g.y;
   // Detect physical landscape tilt even when OS Auto-Rotate is disabled
   if (Math.abs(ax) > Math.abs(ay) * 1.35 && Math.abs(ax) > 4.5) {
-    livePhysicalRotationDeg = ax > 0 ? 90 : -90;
+    livePhysicalRotationDeg = ax > 0 ? -90 : 90;
   } else if (Math.abs(ay) > Math.abs(ax) * 1.35 && Math.abs(ay) > 4.5) {
     livePhysicalRotationDeg = 0;
   }
