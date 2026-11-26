@@ -387,7 +387,7 @@ function handleClassSelectChange() {
   }
 }
 
-async function loadClassFolders() {
+async function loadClassFolders(preserveClass = '') {
   const eventSelect = document.getElementById('eventName');
   const eventName = eventSelect ? eventSelect.value : '';
 
@@ -411,6 +411,10 @@ async function loadClassFolders() {
             option.textContent = folder;
             classSelect.appendChild(option);
           });
+          if (preserveClass && folders.includes(preserveClass)) {
+            classSelect.value = preserveClass;
+            handleClassSelectChange();
+          }
         } else {
           const option = document.createElement('option');
           option.value = '';
@@ -430,8 +434,11 @@ async function loadClassFolders() {
   }
 }
 
-async function loadEvents() {
-  showStatus('Loading events...', 'warning');
+async function loadEvents(options = {}) {
+  const { silent = false, preserveEvent = '', preserveClass = '' } = options;
+  if (!silent) {
+    showStatus('Loading events...', 'warning');
+  }
   try {
     const folders = await apiCall('/api/events');
     const select = document.getElementById('eventName');
@@ -445,18 +452,28 @@ async function loadEvents() {
           option.textContent = folder;
           select.appendChild(option);
         });
-        showStatus('Events loaded successfully', 'success');
+        if (preserveEvent && folders.includes(preserveEvent)) {
+          select.value = preserveEvent;
+          await loadClassFolders(preserveClass);
+        }
+        if (!silent) {
+          showStatus('Events loaded successfully', 'success');
+        }
       } else {
         const option = document.createElement('option');
         option.value = '';
         option.textContent = 'No events found';
         option.disabled = true;
         select.appendChild(option);
-        showStatus('No events found. Create a new one.', 'warning');
+        if (!silent) {
+          showStatus('No events found. Create a new one.', 'warning');
+        }
       }
     }
   } catch (error) {
-    showStatus('Error loading events: ' + error.message, 'error');
+    if (!silent) {
+      showStatus('Error loading events: ' + error.message, 'error');
+    }
   }
 }
 
@@ -903,20 +920,87 @@ function addWatermarkToImage(file, eventName, className, callback) {
   reader.readAsDataURL(file);
 }
 
-// Upload Files Action
-function uploadFiles() {
+// Validate and return selected event and class names
+function getSelectedEventAndClass() {
   const eventSelect = document.getElementById('eventName');
   const eventNameInput = document.getElementById('newEventName');
-  let eventName = eventSelect && eventSelect.value === 'new' ? eventNameInput.value.trim() : (eventSelect ? eventSelect.value : '');
+  const eventName = eventSelect && eventSelect.value === 'new' ? eventNameInput.value.trim() : (eventSelect ? eventSelect.value : '');
 
   const classSelect = document.getElementById('className');
   const classNameInput = document.getElementById('newClassName');
-  let className = classSelect && classSelect.value === 'new' ? classNameInput.value.trim() : (classSelect ? classSelect.value : '');
+  const className = classSelect && classSelect.value === 'new' ? classNameInput.value.trim() : (classSelect ? classSelect.value : '');
 
-  if (!eventName) return showStatus('Please select or enter an event name', 'error');
-  if (eventSelect && eventSelect.value === 'new' && eventName.length < 3) return showStatus('Event name must be at least 3 characters', 'error');
-  if (!className) return showStatus('Please select or enter a class name', 'error');
-  if (classSelect && classSelect.value === 'new' && className.length < 2) return showStatus('Class name must be at least 2 characters', 'error');
+  if (!eventName) {
+    showStatus('Please select or enter an event name first', 'error');
+    return null;
+  }
+  if (eventSelect && eventSelect.value === 'new' && eventName.length < 3) {
+    showStatus('Event name must be at least 3 characters', 'error');
+    return null;
+  }
+  if (!className) {
+    showStatus('Please select or enter a class name first', 'error');
+    return null;
+  }
+  if (classSelect && classSelect.value === 'new' && className.length < 2) {
+    showStatus('Class name must be at least 2 characters', 'error');
+    return null;
+  }
+
+  return { eventName, className };
+}
+
+// Open device camera directly for instant photo capture & upload
+function triggerDirectCamera() {
+  const selection = getSelectedEventAndClass();
+  if (!selection) {
+    const eventEl = document.getElementById('eventName');
+    if (eventEl) eventEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  const cameraInput = document.getElementById('cameraInput');
+  if (cameraInput) {
+    cameraInput.value = '';
+    cameraInput.click();
+  }
+}
+
+// Immediately process and upload captured photo to Google Drive & Sheets
+function handleDirectCameraCapture() {
+  const cameraInput = document.getElementById('cameraInput');
+  if (!cameraInput || !cameraInput.files || cameraInput.files.length === 0) return;
+
+  const selection = getSelectedEventAndClass();
+  if (!selection) return;
+
+  const file = cameraInput.files[0];
+  if (file.size > 50 * 1024 * 1024) {
+    showStatus('Captured photo exceeds 50MB limit and cannot be uploaded', 'error');
+    cameraInput.value = '';
+    return;
+  }
+
+  // Ensure a clean timestamped filename for camera photos
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const ext = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : 'jpg';
+  const renamedFile = new File([file], `photo_${timestamp}.${ext}`, {
+    type: file.type || 'image/jpeg',
+    lastModified: file.lastModified
+  });
+
+  selectedFiles = [renamedFile];
+  updateFilePreview();
+  updateFileCount();
+
+  processAndUploadFiles([renamedFile], selection.eventName, selection.className, true);
+  cameraInput.value = '';
+}
+
+// Upload Files Action
+function uploadFiles() {
+  const selection = getSelectedEventAndClass();
+  if (!selection) return;
   if (selectedFiles.length === 0) return showStatus('Please select at least one file', 'error');
 
   if (!watermarkEnabled) {
@@ -927,25 +1011,37 @@ function uploadFiles() {
     }
   }
 
+  processAndUploadFiles(selectedFiles, selection.eventName, selection.className, false);
+}
+
+// Shared processing & upload pipeline for both manual and instant camera uploads
+function processAndUploadFiles(filesToUpload, eventName, className, isInstantCamera = false) {
   const loading = document.getElementById('loading');
   const progressContainer = document.getElementById('progressContainer');
+  const takePhotoBtn = document.getElementById('takePhotoBtn');
   if (loading) loading.style.display = 'block';
   if (progressContainer) progressContainer.style.display = 'block';
+  if (takePhotoBtn) takePhotoBtn.disabled = true;
 
   updateProgress(0);
-  showStatus(`Preparing files ${watermarkEnabled ? 'with watermark' : 'without watermark'}...`, 'success');
+  showStatus(
+    isInstantCamera
+      ? `Photo captured! ${watermarkEnabled ? 'Applying watermark & ' : ''}uploading immediately...`
+      : `Preparing files ${watermarkEnabled ? 'with watermark' : 'without watermark'}...`,
+    'success'
+  );
 
   const processedFiles = [];
   let processedCount = 0;
 
-  selectedFiles.forEach((file, index) => {
+  filesToUpload.forEach((file, index) => {
     if (file.type.startsWith('image/') && watermarkEnabled) {
       addWatermarkToImage(file, eventName, className, function(watermarkedFile) {
         processedFiles[index] = watermarkedFile;
         processedCount++;
-        updateProgress((processedCount / selectedFiles.length) * 100);
+        updateProgress((processedCount / filesToUpload.length) * 100);
 
-        if (processedCount === selectedFiles.length) {
+        if (processedCount === filesToUpload.length) {
           uploadToDrive(processedFiles, eventName, className);
         }
       });
@@ -953,9 +1049,9 @@ function uploadFiles() {
       readFileAsDataURL(file).then(result => {
         processedFiles[index] = result;
         processedCount++;
-        updateProgress((processedCount / selectedFiles.length) * 100);
+        updateProgress((processedCount / filesToUpload.length) * 100);
 
-        if (processedCount === selectedFiles.length) {
+        if (processedCount === filesToUpload.length) {
           uploadToDrive(processedFiles, eventName, className);
         }
       });
@@ -965,6 +1061,7 @@ function uploadFiles() {
 
 async function uploadToDrive(filesData, eventName, className) {
   const validFilesData = filesData.filter(file => file !== undefined);
+  const takePhotoBtn = document.getElementById('takePhotoBtn');
 
   try {
     const result = await apiCall('/api/upload', 'POST', {
@@ -978,6 +1075,7 @@ async function uploadToDrive(filesData, eventName, className) {
     const progressContainer = document.getElementById('progressContainer');
     if (loading) loading.style.display = 'none';
     if (progressContainer) progressContainer.style.display = 'none';
+    if (takePhotoBtn) takePhotoBtn.disabled = false;
 
     if (result.status === 'success') {
       let message = `<strong>Upload successful!</strong><br>`;
@@ -998,7 +1096,7 @@ async function uploadToDrive(filesData, eventName, className) {
       showStatus(message, 'success');
       clearSelection(false);
 
-      loadEvents();
+      loadEvents({ silent: true, preserveEvent: eventName, preserveClass: className });
       initializeFolderView();
       loadRecentFolders();
     } else {
@@ -1009,6 +1107,7 @@ async function uploadToDrive(filesData, eventName, className) {
     const progressContainer = document.getElementById('progressContainer');
     if (loading) loading.style.display = 'none';
     if (progressContainer) progressContainer.style.display = 'none';
+    if (takePhotoBtn) takePhotoBtn.disabled = false;
     showStatus('Upload Error: ' + error.message, 'error');
   }
 }
