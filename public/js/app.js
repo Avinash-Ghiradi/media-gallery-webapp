@@ -15,6 +15,7 @@ let currentDeletion = {
   eventIndex: -1,
   classIndex: -1
 };
+let currentUserAssignedClass = '';
 let deferredInstallPrompt = null;
 
 // Register Service Worker & handle PWA install prompt
@@ -138,7 +139,7 @@ async function checkAuthentication() {
   try {
     const authStatus = await apiCall('/api/auth/status');
     if (authStatus && authStatus.isAuthenticated) {
-      showMainApp(authStatus.username, authStatus.googleConfigured);
+      showMainApp(authStatus.username, authStatus.googleConfigured, authStatus.assignedClass || '');
     } else {
       showLogin();
     }
@@ -149,19 +150,55 @@ async function checkAuthentication() {
 }
 
 function showLogin() {
+  currentUserAssignedClass = '';
   document.getElementById('mainApp').style.display = 'none';
   document.getElementById('loginOverlay').style.display = 'flex';
+  const userEl = document.getElementById('loginUsername');
+  if (userEl) userEl.value = '';
   document.getElementById('password').value = '';
-  document.getElementById('password').focus();
+  (userEl || document.getElementById('password')).focus();
 
   const statusMessage = document.getElementById('loginStatusMessage');
   if (statusMessage) statusMessage.style.display = 'none';
 }
 
-function showMainApp(username, googleConfigured) {
-  document.getElementById('user-name').textContent = 'Welcome, ' + (username || 'Admin');
+function applyAssignedClassLock() {
+  const classSelect = document.getElementById('className');
+  const newClassInput = document.getElementById('newClassName');
+  const badge = document.getElementById('assignedClassBadge');
+  if (!classSelect) return;
+
+  if (currentUserAssignedClass) {
+    let hasOption = Array.from(classSelect.options).some(opt => opt.value === currentUserAssignedClass);
+    if (!hasOption) {
+      const option = document.createElement('option');
+      option.value = currentUserAssignedClass;
+      option.textContent = currentUserAssignedClass;
+      classSelect.appendChild(option);
+    }
+    classSelect.value = currentUserAssignedClass;
+    classSelect.disabled = true;
+    if (newClassInput) {
+      newClassInput.style.display = 'none';
+      newClassInput.value = '';
+    }
+    if (badge) {
+      badge.textContent = `Auto: ${currentUserAssignedClass}`;
+      badge.style.display = 'inline-block';
+    }
+  } else {
+    classSelect.disabled = false;
+    if (badge) badge.style.display = 'none';
+  }
+}
+
+function showMainApp(username, googleConfigured, assignedClass = '') {
+  currentUserAssignedClass = assignedClass || '';
+  const classNote = currentUserAssignedClass ? ` (${currentUserAssignedClass})` : '';
+  document.getElementById('user-name').textContent = 'Welcome, ' + (username || 'Admin') + classNote;
   document.getElementById('mainApp').style.display = 'block';
   document.getElementById('loginOverlay').style.display = 'none';
+  applyAssignedClassLock();
   loadEvents();
   initializeFolderView();
   loadRecentFolders();
@@ -331,6 +368,8 @@ function handleEnterKey(event) {
 }
 
 async function login() {
+  const usernameEl = document.getElementById('loginUsername');
+  const username = usernameEl ? usernameEl.value.trim() : '';
   const password = document.getElementById('password').value.trim();
   const loginBtn = document.getElementById('loginBtn');
   const loading = document.getElementById('loginLoading');
@@ -346,7 +385,7 @@ async function login() {
   if (statusMessage) statusMessage.style.display = 'none';
 
   try {
-    const result = await apiCall('/api/auth/login', 'POST', { password });
+    const result = await apiCall('/api/auth/login', 'POST', { username, password });
     if (loading) loading.style.display = 'none';
     if (loginBtn) loginBtn.disabled = false;
 
@@ -462,12 +501,15 @@ async function loadClassFolders(preserveClass = '') {
       }
     } catch (error) {
       showStatus('Error loading classes: ' + error.message, 'error');
+    } finally {
+      applyAssignedClassLock();
     }
   } else {
     const classSelect = document.getElementById('className');
     if (classSelect) {
       classSelect.innerHTML = '<option value="">-- Select Class --</option><option value="new">+ Create New Class</option>';
     }
+    applyAssignedClassLock();
   }
 }
 
