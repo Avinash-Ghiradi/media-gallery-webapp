@@ -47,7 +47,8 @@ app.use(session({
 
 // Dynamic PWA manifest (so updated app logo icon URLs bust browser cache)
 const CUSTOM_PUBLIC_LOGO = path.join(__dirname, 'public', 'custom-logo.png');
-app.get('/manifest.json', (req, res) => {
+app.get('/manifest.json', async (req, res) => {
+  await ensurePersistentAppLogoLoaded();
   let version = '1';
   if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
     version = String(Math.floor(fs.statSync(CUSTOM_PUBLIC_LOGO).mtimeMs));
@@ -77,6 +78,15 @@ app.get('/manifest.json', (req, res) => {
       }
     ]
   });
+});
+
+// Restore custom logo from Google Drive if requested directly on a fresh container
+app.get('/custom-logo.png', async (req, res, next) => {
+  await ensurePersistentAppLogoLoaded();
+  if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
+    return res.sendFile(CUSTOM_PUBLIC_LOGO);
+  }
+  next();
 });
 
 // Serve static frontend files
@@ -471,8 +481,32 @@ app.post('/api/users/apply-default-password', auth.requireAdmin, async (req, res
 
 const DEFAULT_LOGO_URL = 'https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN';
 const SERVER_WATERMARK_LOGO = path.join(__dirname, 'src', 'school_logo.png');
+let logoRestorePromise = null;
 
-app.get('/api/branding', (req, res) => {
+async function ensurePersistentAppLogoLoaded() {
+  if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) return true;
+  if (!logoRestorePromise) {
+    logoRestorePromise = (async () => {
+      try {
+        const buf = await googleService.loadAppLogoFromDrive();
+        if (buf && buf.length > 0) {
+          fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
+          fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
+          videoWatermark.reloadLogo();
+          await regeneratePwaIconsFromBuffer(buf);
+          return true;
+        }
+      } catch (e) {
+        console.warn('Logo restore skipped:', e.message);
+      }
+      return false;
+    })();
+  }
+  return logoRestorePromise;
+}
+
+app.get('/api/branding', async (req, res) => {
+  await ensurePersistentAppLogoLoaded();
   let logoUrl = DEFAULT_LOGO_URL;
   if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
     const stat = fs.statSync(CUSTOM_PUBLIC_LOGO);
@@ -526,6 +560,8 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
     fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
     videoWatermark.reloadLogo();
     await regeneratePwaIconsFromBuffer(buf);
+    await googleService.saveAppLogoToDrive(buf);
+    logoRestorePromise = Promise.resolve(true);
 
     const logoUrl = `/custom-logo.png?v=${Date.now()}`;
     res.json({
@@ -538,11 +574,11 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
   }
 });
 
-// Regenerate white-background PWA icons on startup if a custom logo exists
+// Regenerate white-background PWA icons on startup if a custom logo exists, or restore from Google Drive
 if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
   regeneratePwaIconsFromBuffer(fs.readFileSync(CUSTOM_PUBLIC_LOGO));
-} else if (fs.existsSync(SERVER_WATERMARK_LOGO)) {
-  regeneratePwaIconsFromBuffer(fs.readFileSync(SERVER_WATERMARK_LOGO));
+} else {
+  ensurePersistentAppLogoLoaded();
 }
 
 // Fallback index.html for SPA routing
