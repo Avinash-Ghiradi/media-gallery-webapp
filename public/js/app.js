@@ -89,8 +89,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   preloadSchoolLogo();
 
-  initializeFolderView();
-
   document.getElementById('password').addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
       login();
@@ -119,6 +117,10 @@ function switchTab(tabName) {
   }
 
   if (tabName === 'folders') {
+    const folderSelect = document.getElementById('folderEventSelect');
+    if (folderSelect && (folderSelect.options.length <= 2 || folderSelect.options[0].textContent.includes('Error'))) {
+      initializeFolderView();
+    }
     loadFolderLinks();
   } else if (tabName === 'recent') {
     loadRecentFolders();
@@ -161,6 +163,7 @@ function showMainApp(username, googleConfigured) {
   document.getElementById('mainApp').style.display = 'block';
   document.getElementById('loginOverlay').style.display = 'none';
   loadEvents();
+  initializeFolderView();
   loadRecentFolders();
 
   if (googleConfigured === false) {
