@@ -396,6 +396,22 @@
     </div>
   </div>
 
+  <!-- Notice Popup Modal -->
+  <div id="noticeModal" class="confirmation-modal" style="display: none;" onclick="if (event.target === this) closeNoticeModal();">
+    <div class="modal-content">
+      <div class="modal-header notice-modal-header">
+        <i class="fas fa-exclamation-circle"></i>
+        <h3 id="noticeModalTitle">Action Required</h3>
+      </div>
+      <div class="modal-body">
+        <p id="noticeModalMessage"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary notice-ok-btn" onclick="closeNoticeModal()">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/app.js"></script>
 </body>
 </html>
