@@ -1112,8 +1112,8 @@ function copyAllFolderLinks() {
   });
 }
 
-// High-quality smart photo compression (caps longest side at 2560px with 88% JPEG quality)
-function compressPhotoHighQuality(file, maxDim = 2560, quality = 0.88) {
+// High-quality smart photo compression (caps longest side at 1600px with 82% JPEG quality)
+function compressPhotoHighQuality(file, maxDim = 1600, quality = 0.82) {
   return new Promise((resolve) => {
     if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
       return resolve({ blob: file, filename: file.name });
@@ -1169,7 +1169,7 @@ function addWatermarkToImage(file, eventName, className, callback) {
   reader.onload = function(e) {
     const img = new Image();
     img.onload = function() {
-      const maxDim = 1920;
+      const maxDim = 1600;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const targetW = Math.max(1, Math.round(img.width * scale));
       const targetH = Math.max(1, Math.round(img.height * scale));
@@ -1260,7 +1260,7 @@ function addWatermarkToImage(file, eventName, className, callback) {
           });
         };
         reader.readAsDataURL(blob);
-      }, 'image/jpeg', 0.84);
+      }, 'image/jpeg', 0.82);
     };
     img.src = e.target.result;
   };
@@ -2007,7 +2007,7 @@ function handleDirectCameraCapture() {
 }
 
 async function processInstantCameraQueue() {
-  if (instantUploadingCount > 0) return;
+  if (instantUploadingCount >= 2) return;
 
   const runQueueStep = async () => {
     let items = [];
