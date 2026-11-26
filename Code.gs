@@ -91,6 +91,10 @@ function doPost(e) {
       res = addOrUpdateUserInSheet(contents.username, contents.password, contents.assignedClass, contents.details, contents.photoUrl, contents.originalUsername, contents.fullName);
     } else if (action === 'deleteUser') {
       res = deleteUserFromSheet(contents.username);
+    } else if (action === 'changeUserPassword') {
+      res = changeUserPasswordInSheet(contents.username, contents.newPassword);
+    } else if (action === 'applyDefaultPasswordToNamedUsers') {
+      res = applyDefaultPasswordToNamedUsersInSheet();
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -224,13 +228,13 @@ function getUsersFromSheet() {
     var users = {};
     for (var i = startRow; i < data.length; i++) {
       var row = data[i];
-      if (row[0] && row[1]) {
+      var fullName = row[5] ? row[5].toString().trim() : '';
+      var pwd = row[1] ? row[1].toString().trim() : (fullName ? 'Success@123' : '');
+      if (row[0] && pwd) {
         var uname = row[0].toString().trim();
-        var pwd = row[1].toString().trim();
         var assignedClass = row[2] ? row[2].toString().trim() : '';
         var details = row[3] ? row[3].toString().trim() : '';
         var photoUrl = row[4] ? row[4].toString().trim() : '';
-        var fullName = row[5] ? row[5].toString().trim() : '';
         users[uname] = {
           password: pwd,
           assignedClass: assignedClass,
@@ -256,14 +260,16 @@ function getUsersListForAdmin() {
     var list = [];
     for (var i = startRow; i < data.length; i++) {
       var row = data[i];
-      if (row[0] && row[1]) {
+      var fullName = row[5] ? row[5].toString().trim() : '';
+      var pwd = row[1] ? row[1].toString().trim() : (fullName ? 'Success@123' : '');
+      if (row[0] && pwd) {
         list.push({
           username: row[0].toString().trim(),
-          password: row[1].toString().trim(),
+          password: pwd,
           assignedClass: row[2] ? row[2].toString().trim() : '',
           details: row[3] ? row[3].toString().trim() : '',
           photoUrl: row[4] ? row[4].toString().trim() : '',
-          fullName: row[5] ? row[5].toString().trim() : ''
+          fullName: fullName
         });
       }
     }
@@ -275,14 +281,14 @@ function getUsersListForAdmin() {
 
 function addOrUpdateUserInSheet(username, password, assignedClass, details, photoUrl, originalUsername, fullName) {
   try {
-    if (!username || !password) {
+    var cleanUser = username ? username.toString().trim() : '';
+    var cleanFullName = fullName ? fullName.toString().trim() : '';
+    var cleanPass = password ? password.toString().trim() : (cleanFullName ? 'Success@123' : '');
+    if (!cleanUser || !cleanPass) {
       return { status: 'error', message: 'Mobile number / username and password are required' };
     }
-    var cleanUser = username.toString().trim();
-    var cleanPass = password.toString().trim();
     var cleanClass = assignedClass ? assignedClass.toString().trim() : '';
     var cleanDetails = details ? details.toString().trim() : '';
-    var cleanFullName = fullName ? fullName.toString().trim() : '';
     var lookupUser = (originalUsername ? originalUsername.toString().trim() : cleanUser).toLowerCase();
     var finalPhotoUrl = saveProfilePhotoToDrive(cleanUser, photoUrl ? photoUrl.toString().trim() : '');
 
@@ -301,6 +307,49 @@ function addOrUpdateUserInSheet(username, password, assignedClass, details, phot
     return { status: 'success', message: 'User "' + (cleanFullName || cleanUser) + '" added to Google Sheet.' };
   } catch (e) {
     return { status: 'error', message: 'Failed to save user: ' + e.message };
+  }
+}
+
+function changeUserPasswordInSheet(username, newPassword) {
+  try {
+    if (!username || !newPassword) {
+      return { status: 'error', message: 'Username and new password are required' };
+    }
+    var cleanUser = username.toString().trim().toLowerCase();
+    var cleanPass = newPassword.toString().trim();
+    var sheet = ensureUsersSheetExists();
+    var data = sheet.getDataRange().getValues();
+    var startRow = data[0] && data[0][0] && (data[0][0].toString().toLowerCase().indexOf('username') !== -1 || data[0][0].toString().toLowerCase().indexOf('mobile') !== -1) ? 1 : 0;
+
+    for (var i = startRow; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim().toLowerCase() === cleanUser) {
+        sheet.getRange(i + 1, 2).setValue(cleanPass);
+        return { status: 'success', message: 'Password updated successfully.' };
+      }
+    }
+    return { status: 'error', message: 'User not found in sheet' };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
+function applyDefaultPasswordToNamedUsersInSheet() {
+  try {
+    var sheet = ensureUsersSheetExists();
+    var data = sheet.getDataRange().getValues();
+    var startRow = data[0] && data[0][0] && (data[0][0].toString().toLowerCase().indexOf('username') !== -1 || data[0][0].toString().toLowerCase().indexOf('mobile') !== -1) ? 1 : 0;
+    var updated = 0;
+
+    for (var i = startRow; i < data.length; i++) {
+      var fullName = data[i][5] ? data[i][5].toString().trim() : '';
+      if (data[i][0] && fullName) {
+        sheet.getRange(i + 1, 2).setValue('Success@123');
+        updated++;
+      }
+    }
+    return { status: 'success', message: 'Default password (Success@123) applied to ' + updated + ' user(s) with Full Name.' };
+  } catch (e) {
+    return { status: 'error', message: e.message };
   }
 }
 
