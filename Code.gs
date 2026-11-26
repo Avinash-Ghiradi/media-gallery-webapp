@@ -175,7 +175,10 @@ function getUsersFromSheet() {
     for (var i = startRow; i < data.length; i++) {
       var row = data[i];
       if (row[0] && row[1]) {
-        users[row[0].toString().trim()] = row[1].toString().trim();
+        var uname = row[0].toString().trim();
+        var pwd = row[1].toString().trim();
+        var assignedClass = row[2] ? row[2].toString().trim() : '';
+        users[uname] = { password: pwd, assignedClass: assignedClass };
       }
     }
     
@@ -372,6 +375,8 @@ function getOrCreateFolder(parentFolder, folderName) {
   } catch(e){}
   
   return folder;
+}
+
 /**
  * Gets all existing folders under the root folder and spreadsheet logs
  */
@@ -471,10 +476,35 @@ function getSubfoldersForEvent(eventName) {
 
     return subfolderNames.sort();
   } catch (e) {
-    console.error('Error getting subfolders:', e.message);
+    console.error('Error getting subfolders:', e);
     return [];
   }
-}    }
+}
+
+/**
+ * Updates Sheet2
+ */
+function updateSheet2(sheet2, eventName, className, folderUrl, fileUrls) {
+  try {
+    if (sheet2.getLastRow() === 0) {
+      var headers = ['Event Name', 'Class Name', 'Folder URL'];
+      var maxImages = 10;
+      for (var i = 1; i <= maxImages; i++) {
+        headers.push('Image ' + i + ' URL');
+      }
+      sheet2.getRange(1, 1, 1, headers.length).setValues([headers]);
+    }
+    
+    var dataRange = sheet2.getDataRange();
+    var data = dataRange.getValues();
+    
+    var existingRowIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === eventName && data[i][1] === className) {
+        existingRowIndex = i;
+        break;
+      }
+    }
     
     if (existingRowIndex !== -1) {
       var row = data[existingRowIndex];
