@@ -1443,6 +1443,73 @@ async function triggerDirectCamera() {
   }
 }
 
+let liveFlashEnabled = false;
+let livePhysicalRotationDeg = 0;
+let liveMotionListenerActive = false;
+
+function handleLiveDeviceMotion(e) {
+  const g = e && e.accelerationIncludingGravity;
+  if (!g || typeof g.x !== 'number' || typeof g.y !== 'number') return;
+  const ax = g.x;
+  const ay = g.y;
+  // Detect physical landscape tilt even when OS Auto-Rotate is disabled
+  if (Math.abs(ax) > Math.abs(ay) * 1.35 && Math.abs(ax) > 4.5) {
+    livePhysicalRotationDeg = ax > 0 ? 90 : -90;
+  } else if (Math.abs(ay) > Math.abs(ax) * 1.35 && Math.abs(ay) > 4.5) {
+    livePhysicalRotationDeg = 0;
+  }
+}
+
+function startLiveOrientationSensor() {
+  livePhysicalRotationDeg = 0;
+  if (!liveMotionListenerActive && typeof window !== 'undefined' && 'DeviceMotionEvent' in window) {
+    window.addEventListener('devicemotion', handleLiveDeviceMotion);
+    liveMotionListenerActive = true;
+  }
+}
+
+function stopLiveOrientationSensor() {
+  if (liveMotionListenerActive) {
+    window.removeEventListener('devicemotion', handleLiveDeviceMotion);
+    liveMotionListenerActive = false;
+  }
+  livePhysicalRotationDeg = 0;
+}
+
+function updateLiveFlashButtonState() {
+  const btn = document.getElementById('liveFlashBtn');
+  if (!btn) return;
+  const track = liveCameraStream && liveCameraStream.getVideoTracks()[0];
+  const caps = track && typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+  const supported = Boolean(caps && caps.torch);
+  btn.classList.toggle('flash-unsupported', !supported);
+  btn.classList.toggle('flash-on', Boolean(supported && liveFlashEnabled));
+  btn.title = supported
+    ? (liveFlashEnabled ? 'Flash Light: ON (Tap to turn off)' : 'Flash Light: OFF (Tap to turn on)')
+    : 'Flash Light not supported on this camera';
+}
+
+async function toggleLiveCameraFlash() {
+  const track = liveCameraStream && liveCameraStream.getVideoTracks()[0];
+  if (!track) return;
+  const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+  if (!caps || !caps.torch) {
+    showNoticePopup('Flash light is not supported on this camera (try switching to the rear camera).', '', 'Flash Unavailable');
+    liveFlashEnabled = false;
+    updateLiveFlashButtonState();
+    return;
+  }
+  const nextState = !liveFlashEnabled;
+  try {
+    await track.applyConstraints({ advanced: [{ torch: nextState }] });
+    liveFlashEnabled = nextState;
+  } catch (err) {
+    console.warn('Torch toggle failed:', err.message);
+    liveFlashEnabled = false;
+  }
+  updateLiveFlashButtonState();
+}
+
 async function openLiveCamera(selection) {
   const modal = document.getElementById('liveCameraModal');
   const video = document.getElementById('liveCameraVideo');
@@ -1455,9 +1522,11 @@ async function openLiveCamera(selection) {
   cancelLiveCapturedPhoto();
   updateCameraQueueUI();
   requestUploadWakeLock();
+  startLiveOrientationSensor();
 
   try {
     stopLiveCameraStream();
+    startLiveOrientationSensor();
     liveCameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: liveCameraFacing },
@@ -1469,19 +1538,30 @@ async function openLiveCamera(selection) {
     });
     video.srcObject = liveCameraStream;
     await video.play();
+    liveFlashEnabled = false;
+    updateLiveFlashButtonState();
     modal.style.display = 'flex';
     return true;
   } catch (err) {
     console.warn('Live camera unavailable, falling back to system camera:', err.message);
+    stopLiveOrientationSensor();
     return false;
   }
 }
 
 function stopLiveCameraStream() {
   if (liveCameraStream) {
-    liveCameraStream.getTracks().forEach((t) => t.stop());
+    liveCameraStream.getTracks().forEach((t) => {
+      if (liveFlashEnabled && typeof t.applyConstraints === 'function') {
+        t.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+      }
+      t.stop();
+    });
     liveCameraStream = null;
   }
+  liveFlashEnabled = false;
+  updateLiveFlashButtonState();
+  stopLiveOrientationSensor();
   const video = document.getElementById('liveCameraVideo');
   if (video) video.srcObject = null;
 }
@@ -1554,6 +1634,48 @@ function getBlobDimensions(blob) {
   });
 }
 
+function rotateImageBlob(blob, degrees, quality = 0.92) {
+  const normalized = ((degrees % 360) + 360) % 360;
+  if (normalized === 0) return Promise.resolve(blob);
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      const swap = normalized === 90 || normalized === 270;
+      const canvas = document.createElement('canvas');
+      canvas.width = swap ? h : w;
+      canvas.height = swap ? w : h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((normalized * Math.PI) / 180);
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((outBlob) => {
+        resolve(outBlob || blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+    img.src = url;
+  });
+}
+
+async function rotateLiveCapturedPhoto() {
+  if (!livePendingReviewFile) return;
+  const rotatedBlob = await rotateImageBlob(livePendingReviewFile, 90, 0.92);
+  const rotatedFile = new File([rotatedBlob], livePendingReviewFile.name, {
+    type: 'image/jpeg',
+    lastModified: Date.now()
+  });
+  showLiveReviewOverlay(rotatedFile);
+}
+
 async function captureLiveCameraPhoto() {
   const video = document.getElementById('liveCameraVideo');
   const flash = document.getElementById('liveCameraFlash');
@@ -1572,6 +1694,11 @@ async function captureLiveCameraPhoto() {
     const fileName = `photo_${timestamp}_${uniqueSuffix}.jpg`;
     const videoHasSize = video.videoWidth > 0 && video.videoHeight > 0;
     const videoIsLandscape = videoHasSize ? (video.videoWidth >= video.videoHeight) : null;
+    // If OS Auto-Rotate is off so video stays portrait while phone is held sideways,
+    // rotate the captured photo into true landscape using the gravity sensor angle.
+    const extraRotateDeg = (videoIsLandscape === false && livePhysicalRotationDeg !== 0)
+      ? livePhysicalRotationDeg
+      : 0;
 
     // Prefer full-resolution ImageCapture API for crisp, clear camera photos
     const track = liveCameraStream && liveCameraStream.getVideoTracks()[0];
@@ -1587,7 +1714,8 @@ async function captureLiveCameraPhoto() {
         if (!dims || videoIsLandscape === null || photoIsLandscape === videoIsLandscape) {
           const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
           const compressed = await compressPhotoHighQuality(rawFile, 2560, 0.92);
-          const finalFile = new File([compressed.blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.92) : compressed.blob;
+          const finalFile = new File([orientedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(finalFile);
           return;
         } else {
@@ -1613,9 +1741,10 @@ async function captureLiveCameraPhoto() {
     ctx.drawImage(video, 0, 0, w, h);
 
     await new Promise((resolve) => {
-      canvas.toBlob((blob) => {
+      canvas.toBlob(async (blob) => {
         if (blob) {
-          const capturedFile = new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.92) : blob;
+          const capturedFile = new File([orientedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(capturedFile);
         }
         resolve();
