@@ -750,7 +750,7 @@ function loadFolderLinks() {
   const eventName = eventSelect ? eventSelect.value : '';
 
   if (!eventName) {
-    showStatus('Please select an event to view folder links', 'error');
+    showNoticePopup('Please select an event to view folder links', 'folderEventSelect');
     return;
   }
 
@@ -764,11 +764,52 @@ function loadFolderLinks() {
   if (container) container.style.display = 'block';
 
   if (eventName === 'all') {
-    if (title) title.textContent = 'All Folder Links';
+    if (title) title.textContent = 'All Folder Links (With Watermark)';
     loadAllFolderLinks();
   } else {
     if (title) title.textContent = `Folder Links for: ${eventName}`;
     loadEventFolderLinks(eventName);
+  }
+}
+
+async function loadWithoutWatermarkFolders() {
+  const eventSelect = document.getElementById('folderEventSelect');
+  const eventName = eventSelect ? eventSelect.value : '';
+
+  if (!eventName) {
+    showNoticePopup('Please select an event (or All Events) to get Without Watermark photos', 'folderEventSelect');
+    return;
+  }
+
+  const container = document.getElementById('folderLinksContainer');
+  const linksDiv = document.getElementById('folderLinks');
+  const title = document.getElementById('foldersTitle');
+
+  if (linksDiv) {
+    linksDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="spinner" style="width: 2rem; height: 2rem; margin-bottom: 1rem;"></div><p>Loading Without Watermark folders...</p></div>';
+  }
+  if (container) container.style.display = 'block';
+
+  try {
+    if (eventName === 'all') {
+      if (title) title.textContent = 'Without Watermark Photos — All Events';
+      const result = await apiCall('/api/folders/without-watermark');
+      if (result.status === 'success') {
+        displayAllFolderLinks(result.data);
+      } else {
+        showFolderLinksError(result.message);
+      }
+    } else {
+      if (title) title.textContent = `Without Watermark Photos — ${eventName}`;
+      const result = await apiCall(`/api/folders/without-watermark/${encodeURIComponent(eventName)}`);
+      if (result.status === 'success') {
+        displayEventFolderLinks(eventName, result.data);
+      } else {
+        showFolderLinksError(result.message);
+      }
+    }
+  } catch (error) {
+    showFolderLinksError(error.message);
   }
 }
 
