@@ -456,13 +456,54 @@
               <div class="form-col">
                 <div class="form-group">
                   <label for="newUserClass">Assigned Class (leave blank for Admin)</label>
-                  <input type="text" id="newUserClass" placeholder="e.g., 1st STD">
+                  <div class="input-wrapper">
+                    <select id="newUserClass" onchange="handleAdminClassSelectChange()">
+                      <option value="">-- Admin (All Classes) --</option>
+                      <option value="Nursery">Nursery</option>
+                      <option value="LKG">LKG</option>
+                      <option value="UKG">UKG</option>
+                      <option value="1st STD">1st STD</option>
+                      <option value="2nd STD">2nd STD</option>
+                      <option value="3rd STD">3rd STD</option>
+                      <option value="4th STD">4th STD</option>
+                      <option value="5th STD">5th STD</option>
+                      <option value="6th STD">6th STD</option>
+                      <option value="7th STD">7th STD</option>
+                      <option value="8th STD">8th STD</option>
+                      <option value="9th STD">9th STD</option>
+                      <option value="10th STD">10th STD</option>
+                      <option value="__custom__">+ Other / Custom Class</option>
+                    </select>
+                    <div class="input-icon">
+                      <i class="fas fa-chevron-down"></i>
+                    </div>
+                  </div>
+                  <input type="text" id="newUserClassCustom" style="display: none; margin-top: 8px;" placeholder="Enter custom class (e.g., 3rd A Standard)">
                 </div>
               </div>
               <div class="form-col">
                 <div class="form-group">
                   <label for="newUserDetails">Role / Details (optional)</label>
-                  <input type="text" id="newUserDetails" placeholder="e.g., Class Teacher / Phone">
+                  <div class="input-wrapper">
+                    <select id="newUserDetails" onchange="handleAdminRoleSelectChange()">
+                      <option value="">-- Select Role --</option>
+                      <option value="Administrator">Administrator</option>
+                      <option value="Principal">Principal</option>
+                      <option value="Vice Principal">Vice Principal</option>
+                      <option value="Class Teacher">Class Teacher</option>
+                      <option value="Subject Teacher">Subject Teacher</option>
+                      <option value="Co-ordinator">Co-ordinator</option>
+                      <option value="Sports / PT Teacher">Sports / PT Teacher</option>
+                      <option value="Computer Teacher">Computer Teacher</option>
+                      <option value="Office Staff">Office Staff</option>
+                      <option value="Media / Event Team">Media / Event Team</option>
+                      <option value="__custom__">+ Other / Custom Role</option>
+                    </select>
+                    <div class="input-icon">
+                      <i class="fas fa-chevron-down"></i>
+                    </div>
+                  </div>
+                  <input type="text" id="newUserDetailsCustom" style="display: none; margin-top: 8px;" placeholder="Enter custom role or details">
                 </div>
               </div>
             </div>
