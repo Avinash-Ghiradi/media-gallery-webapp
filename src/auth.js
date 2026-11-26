@@ -123,6 +123,7 @@ async function authenticateUser(req, password, inputUsername = '') {
     const cleanInputUser = (inputUsername || '').trim().toLowerCase();
 
     for (const username in users) {
+      if (username.startsWith('__BRANDING_')) continue;
       const record = parseUserRecord(users[username]);
       const userMatches = !cleanInputUser || username.toLowerCase() === cleanInputUser;
       if (userMatches && record.password === password) {
