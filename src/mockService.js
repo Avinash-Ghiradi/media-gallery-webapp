@@ -66,6 +66,25 @@ function cleanFullNameOrUser(fullName, username) {
   return (fullName || '').trim() || username;
 }
 
+function changeUserPassword(username, newPassword) {
+  const cleanUser = (username || '').trim().toLowerCase();
+  const user = mockUsers.find((u) => u.username.toLowerCase() === cleanUser);
+  if (!user) return { status: 'error', message: 'User not found' };
+  user.password = (newPassword || '').trim();
+  return { status: 'success', message: 'Password updated successfully.' };
+}
+
+function applyDefaultPasswordToNamedUsers() {
+  let count = 0;
+  mockUsers.forEach((u) => {
+    if (u.fullName && u.fullName.trim()) {
+      u.password = 'Success@123';
+      count++;
+    }
+  });
+  return { status: 'success', message: `Default password (Success@123) applied to ${count} user(s) with Full Name.` };
+}
+
 function deleteUser(username) {
   const cleanUser = (username || '').trim().toLowerCase();
   const idx = mockUsers.findIndex((u) => u.username.toLowerCase() === cleanUser);
@@ -336,6 +355,8 @@ module.exports = {
   getUsersListForAdmin,
   addOrUpdateUser,
   deleteUser,
+  changeUserPassword,
+  applyDefaultPasswordToNamedUsers,
   getAllFolders,
   getSubfoldersForEvent,
   uploadFilesToDrive,
