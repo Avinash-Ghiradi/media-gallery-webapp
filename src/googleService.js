@@ -247,24 +247,44 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     }
   }
 
-  if (config.gasWebAppUrl) {
+  const drive = getDriveClient();
+  const sheets = getSheetsClient();
+
+  if ((!drive || !sheets) && config.gasWebAppUrl) {
     try {
       console.log('Forwarding upload to Google Apps Script Web App URL:', config.gasWebAppUrl);
-      const res = await callGasBridge('uploadFilesToDrive', {
-        filesData: filesData,
-        originalFilesData: originalsList,
-        eventName: eventName,
-        className: className,
-        addWatermark: addWatermark
-      });
-      if (res) return res;
+      if (addWatermark && originalsList.length > 0) {
+        const [wmRes] = await Promise.all([
+          callGasBridge('uploadFilesToDrive', {
+            filesData: filesData,
+            originalFilesData: [],
+            eventName: eventName,
+            className: className,
+            addWatermark: true
+          }),
+          callGasBridge('uploadFilesToDrive', {
+            filesData: originalsList,
+            originalFilesData: [],
+            eventName: eventName,
+            className: className,
+            addWatermark: false
+          })
+        ]);
+        if (wmRes) return wmRes;
+      } else {
+        const res = await callGasBridge('uploadFilesToDrive', {
+          filesData: filesData,
+          originalFilesData: [],
+          eventName: eventName,
+          className: className,
+          addWatermark: addWatermark
+        });
+        if (res) return res;
+      }
     } catch (e) {
       console.error('Error forwarding to GAS WebApp URL:', e.message);
     }
   }
-
-  const drive = getDriveClient();
-  const sheets = getSheetsClient();
 
   if (!drive || !sheets) {
     return mockService.uploadFilesToDrive(filesData, eventName, className, addWatermark, originalsList);
