@@ -15,7 +15,7 @@ const upload = multer({
   dest: path.join(os.tmpdir(), 'media-gallery-uploads'),
   limits: {
     fileSize: MAX_FILE_SIZE_BYTES,
-    files: 50
+    files: 1000
   }
 });
 
@@ -246,8 +246,8 @@ app.post('/api/upload', auth.requireAuth, async (req, res) => {
 
 // Multipart streaming upload route supporting files up to 500MB
 const uploadMultipartFields = upload.fields([
-  { name: 'files', maxCount: 50 },
-  { name: 'originalFiles', maxCount: 50 }
+  { name: 'files', maxCount: 500 },
+  { name: 'originalFiles', maxCount: 500 }
 ]);
 
 app.post('/api/upload-multipart', auth.requireAuth, (req, res) => {
