@@ -687,6 +687,9 @@
         <div id="liveCameraQueueText" class="live-camera-queue">Ready to capture</div>
       </div>
       <div class="live-camera-top-actions">
+        <button type="button" id="liveAspectBtn" class="live-cam-pill-btn" onclick="toggleLiveAspectRatio()" title="Switch Aspect Ratio (4:3 / 16:9)">
+          4:3
+        </button>
         <button type="button" id="liveFlashBtn" class="live-cam-icon-btn" onclick="toggleLiveCameraFlash()" title="Toggle Flash Light">
           <i class="fas fa-bolt"></i>
         </button>
@@ -700,7 +703,16 @@
     </div>
 
     <div class="live-camera-stage">
-      <video id="liveCameraVideo" autoplay playsinline muted></video>
+      <div id="liveCameraViewport" class="live-camera-viewport ratio-4-3">
+        <video id="liveCameraVideo" autoplay playsinline muted></video>
+      </div>
+      <div id="liveCameraLevel" class="live-camera-level" aria-hidden="true">
+        <div class="live-level-track">
+          <div id="liveLevelLine" class="live-level-line"></div>
+          <div class="live-level-center"></div>
+        </div>
+        <span id="liveLevelDeg" class="live-level-deg">0°</span>
+      </div>
       <div id="liveCameraFlash" class="live-camera-flash"></div>
 
       <!-- In-Camera Quick Review Overlay (OK / Cancel) -->
