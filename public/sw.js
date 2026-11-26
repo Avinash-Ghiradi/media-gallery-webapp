@@ -1,4 +1,4 @@
-const CACHE_NAME = 'media-gallery-v5';
+const CACHE_NAME = 'media-gallery-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -57,57 +57,68 @@ let swUploading = false;
 
 async function processPendingUploadsInSW() {
   if (swUploading) return;
-  swUploading = true;
-  try {
-    const items = await getAllPendingUploads();
-    const now = Date.now();
-    for (const item of items) {
-      // Skip items actively being uploaded by foreground tab within last 2 minutes
-      if (item.status === 'uploading' && item.startedAt && (now - item.startedAt) < 120000) {
-        continue;
-      }
-      item.status = 'uploading';
-      item.startedAt = Date.now();
-      await updateUploadItem(item);
-
-      try {
-        const formData = new FormData();
-        formData.append('eventName', item.eventName);
-        formData.append('className', item.className);
-        formData.append('addWatermark', item.addWatermark ? 'true' : 'false');
-        (item.files || []).forEach((f) => {
-          formData.append('files', f.blob, f.filename);
-        });
-        (item.originalFiles || []).forEach((f) => {
-          formData.append('originalFiles', f.blob, f.filename);
-        });
-
-        const res = await fetch('/api/upload-multipart', {
-          method: 'POST',
-          body: formData,
-          credentials: 'include'
-        });
-
-        if (res.ok) {
-          const json = await res.json();
-          if (json && json.status === 'success') {
-            await deleteUploadItem(item.id);
-            const allClients = await self.clients.matchAll();
-            allClients.forEach((client) => {
-              client.postMessage({ type: 'BG_UPLOAD_DONE', id: item.id, eventName: item.eventName, className: item.className });
-            });
-            continue;
-          }
+  const run = async () => {
+    swUploading = true;
+    try {
+      const items = await getAllPendingUploads();
+      const now = Date.now();
+      for (const item of items) {
+        // Skip items actively being uploaded by foreground tab within last 2 minutes
+        if (item.status === 'uploading' && item.startedAt && (now - item.startedAt) < 120000) {
+          continue;
         }
-        item.status = 'pending';
+        item.status = 'uploading';
+        item.startedAt = Date.now();
         await updateUploadItem(item);
-      } catch (err) {
-        item.status = 'pending';
-        await updateUploadItem(item);
+
+        try {
+          const formData = new FormData();
+          formData.append('eventName', item.eventName);
+          formData.append('className', item.className);
+          formData.append('addWatermark', item.addWatermark ? 'true' : 'false');
+          (item.files || []).forEach((f) => {
+            formData.append('files', f.blob, f.filename);
+          });
+          (item.originalFiles || []).forEach((f) => {
+            formData.append('originalFiles', f.blob, f.filename);
+          });
+
+          const res = await fetch('/api/upload-multipart', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            if (json && json.status === 'success') {
+              await deleteUploadItem(item.id);
+              const allClients = await self.clients.matchAll();
+              allClients.forEach((client) => {
+                client.postMessage({ type: 'BG_UPLOAD_DONE', id: item.id, eventName: item.eventName, className: item.className });
+              });
+              continue;
+            }
+          }
+          item.status = 'pending';
+          await updateUploadItem(item);
+        } catch (err) {
+          item.status = 'pending';
+          await updateUploadItem(item);
+        }
       }
+    } finally {
+      swUploading = false;
     }
-  } finally {
-    swUploading = false;
+  };
+
+  if (self.navigator && self.navigator.locks && typeof self.navigator.locks.request === 'function') {
+    await self.navigator.locks.request('sg_upload_queue_lock', { ifAvailable: true }, async (lock) => {
+      if (!lock) return;
+      await run();
+    });
+  } else {
+    await run();
   }
 }
 
