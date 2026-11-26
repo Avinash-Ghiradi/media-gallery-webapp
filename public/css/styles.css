@@ -1097,7 +1097,7 @@ button {
 
 .recent-folders-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 1rem;
 }
 
@@ -1106,6 +1106,9 @@ button {
   border-radius: var(--radius-sm);
   padding: 1rem;
   background: var(--light-gray);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .recent-folder-header {
@@ -1143,10 +1146,14 @@ button {
   gap: 0.5rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .recent-folder-url {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.78rem;
   color: var(--gray);
   overflow: hidden;
@@ -1601,7 +1608,27 @@ button {
   }
 
   .recent-folders-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card,
+  .recent-folders-section,
+  .recent-folder-card,
+  .folder-card,
+  .event-card,
+  .class-item {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .recent-folder-url {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .event-header {
