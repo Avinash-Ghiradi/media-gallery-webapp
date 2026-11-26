@@ -31,15 +31,20 @@ const os = require('os');
 const logoPath = path.join(__dirname, 'school_logo.png');
 let loadedLogo = null;
 
-if (fs.existsSync(logoPath) && Image) {
-  try {
-    const logoBuf = fs.readFileSync(logoPath);
-    loadedLogo = new Image();
-    loadedLogo.src = logoBuf;
-  } catch (e) {
-    console.error('Error loading school logo:', e.message);
+function reloadLogo() {
+  if (fs.existsSync(logoPath) && Image) {
+    try {
+      const logoBuf = fs.readFileSync(logoPath);
+      const img = new Image();
+      img.src = logoBuf;
+      loadedLogo = img;
+    } catch (e) {
+      console.error('Error loading school logo:', e.message);
+    }
   }
 }
+
+reloadLogo();
 
 /**
  * Probe video dimensions (width and height) using ffprobe
@@ -216,5 +221,6 @@ async function watermarkVideo(inputBuffer, eventName = '', className = '', origi
 }
 
 module.exports = {
-  watermarkVideo
+  watermarkVideo,
+  reloadLogo
 };
