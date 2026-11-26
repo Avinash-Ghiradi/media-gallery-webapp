@@ -36,6 +36,8 @@ function doGet(e) {
         res = getFolderInfoForWhatsApp(e.parameter.eventName, e.parameter.className);
       } else if (action === 'getUsersFromSheet') {
         res = getUsersFromSheet();
+      } else if (action === 'getUsersListForAdmin') {
+        res = getUsersListForAdmin();
       }
 
       if (res) {
@@ -83,6 +85,12 @@ function doPost(e) {
       res = getFolderInfoForWhatsApp(contents.eventName, contents.className);
     } else if (action === 'getUsersFromSheet') {
       res = getUsersFromSheet();
+    } else if (action === 'getUsersListForAdmin') {
+      res = getUsersListForAdmin();
+    } else if (action === 'addOrUpdateUser') {
+      res = addOrUpdateUserInSheet(contents.username, contents.password, contents.assignedClass, contents.details);
+    } else if (action === 'deleteUser') {
+      res = deleteUserFromSheet(contents.username);
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -153,23 +161,30 @@ function isUserAuthenticated() {
   return true; // Web App Bridge bypasses Apps Script UI session (Auth is managed by Node.js server)
 }
 
+function ensureUsersSheetExists() {
+  var spreadsheet = SpreadsheetApp.openById(USERS_SHEET_ID);
+  var sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(USERS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 4).setValues([['Username', 'Password', 'Class', 'Role / Details']]);
+    sheet.appendRow(['admin', 'password123', '', 'Administrator']);
+    sheet.appendRow(['Avinash', 'Avinash123', '', 'Administrator']);
+  } else if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, 4).setValues([['Username', 'Password', 'Class', 'Role / Details']]);
+  }
+  return sheet;
+}
+
 /**
- * Get users from Google Sheet
+ * Get users from Google Sheet (auto-creates users tab if missing)
  */
 function getUsersFromSheet() {
   try {
-    var spreadsheet = SpreadsheetApp.openById(USERS_SHEET_ID);
-    var sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
-    
-    if (!sheet) {
-      console.log('Users sheet not found, using default admin user');
-      return { 'admin': 'password123' };
-    }
-    
+    var sheet = ensureUsersSheetExists();
     var dataRange = sheet.getDataRange();
     var data = dataRange.getValues();
     
-    var startRow = data[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
+    var startRow = data[0] && data[0][0] && data[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
     
     var users = {};
     for (var i = startRow; i < data.length; i++) {
@@ -186,6 +201,75 @@ function getUsersFromSheet() {
   } catch (e) {
     console.error('Error reading users from sheet:', e);
     return { 'admin': 'password123' };
+  }
+}
+
+function getUsersListForAdmin() {
+  try {
+    var sheet = ensureUsersSheetExists();
+    var data = sheet.getDataRange().getValues();
+    var startRow = data[0] && data[0][0] && data[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
+    var list = [];
+    for (var i = startRow; i < data.length; i++) {
+      var row = data[i];
+      if (row[0] && row[1]) {
+        list.push({
+          username: row[0].toString().trim(),
+          password: row[1].toString().trim(),
+          assignedClass: row[2] ? row[2].toString().trim() : '',
+          details: row[3] ? row[3].toString().trim() : ''
+        });
+      }
+    }
+    return { status: 'success', data: list };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
+function addOrUpdateUserInSheet(username, password, assignedClass, details) {
+  try {
+    if (!username || !password) {
+      return { status: 'error', message: 'Username and password are required' };
+    }
+    var cleanUser = username.toString().trim();
+    var cleanPass = password.toString().trim();
+    var cleanClass = assignedClass ? assignedClass.toString().trim() : '';
+    var cleanDetails = details ? details.toString().trim() : '';
+
+    var sheet = ensureUsersSheetExists();
+    var data = sheet.getDataRange().getValues();
+    var startRow = data[0] && data[0][0] && data[0][0].toString().toLowerCase() === 'username' ? 1 : 0;
+
+    for (var i = startRow; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim().toLowerCase() === cleanUser.toLowerCase()) {
+        sheet.getRange(i + 1, 1, 1, 4).setValues([[cleanUser, cleanPass, cleanClass, cleanDetails]]);
+        return { status: 'success', message: 'User "' + cleanUser + '" updated in Google Sheet.' };
+      }
+    }
+
+    sheet.appendRow([cleanUser, cleanPass, cleanClass, cleanDetails]);
+    return { status: 'success', message: 'User "' + cleanUser + '" added to Google Sheet.' };
+  } catch (e) {
+    return { status: 'error', message: 'Failed to save user: ' + e.message };
+  }
+}
+
+function deleteUserFromSheet(username) {
+  try {
+    if (!username) return { status: 'error', message: 'Username is required' };
+    var cleanUser = username.toString().trim().toLowerCase();
+    var sheet = ensureUsersSheetExists();
+    var data = sheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (data[i][0] && data[i][0].toString().trim().toLowerCase() === cleanUser) {
+        sheet.deleteRow(i + 1);
+        return { status: 'success', message: 'User "' + username + '" deleted.' };
+      }
+    }
+    return { status: 'error', message: 'User not found' };
+  } catch (e) {
+    return { status: 'error', message: e.message };
   }
 }
 
