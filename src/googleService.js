@@ -1346,6 +1346,72 @@ async function applyDefaultPasswordToNamedUsers() {
   }
 }
 
+const APP_BRANDING_LOGO_NAME = 'app_branding_logo.png';
+
+async function saveAppLogoToDrive(buffer) {
+  const drive = getDriveClient();
+  if (!drive || !config.driveRootFolderId || !buffer) return null;
+  try {
+    const query = `name = '${APP_BRANDING_LOGO_NAME}' and '${config.driveRootFolderId}' in parents and trashed = false`;
+    const listRes = await drive.files.list({
+      q: query,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      fields: 'files(id)'
+    });
+    const bufferStream = new stream.PassThrough();
+    bufferStream.end(buffer);
+
+    if (listRes.data.files && listRes.data.files.length > 0) {
+      const fileId = listRes.data.files[0].id;
+      await drive.files.update({
+        fileId,
+        media: { mimeType: 'image/png', body: bufferStream },
+        supportsAllDrives: true
+      });
+      return fileId;
+    }
+
+    const created = await drive.files.create({
+      requestBody: {
+        name: APP_BRANDING_LOGO_NAME,
+        parents: [config.driveRootFolderId]
+      },
+      media: { mimeType: 'image/png', body: bufferStream },
+      supportsAllDrives: true,
+      fields: 'id'
+    });
+    return created.data.id;
+  } catch (err) {
+    console.warn('Could not persist app logo to Google Drive:', err.message);
+    return null;
+  }
+}
+
+async function loadAppLogoFromDrive() {
+  const drive = getDriveClient();
+  if (!drive || !config.driveRootFolderId) return null;
+  try {
+    const query = `name = '${APP_BRANDING_LOGO_NAME}' and '${config.driveRootFolderId}' in parents and trashed = false`;
+    const listRes = await drive.files.list({
+      q: query,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      fields: 'files(id)'
+    });
+    if (!listRes.data.files || listRes.data.files.length === 0) return null;
+    const fileId = listRes.data.files[0].id;
+    const fileRes = await drive.files.get(
+      { fileId, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' }
+    );
+    return Buffer.from(fileRes.data);
+  } catch (err) {
+    console.warn('Could not load persisted app logo from Google Drive:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   isConfigured: () => {
     initGoogleAuth();
@@ -1370,5 +1436,7 @@ module.exports = {
   deleteClassFolder,
   getEventsForWhatsApp,
   getClassesForWhatsApp,
-  getFolderInfoForWhatsApp
+  getFolderInfoForWhatsApp,
+  saveAppLogoToDrive,
+  loadAppLogoFromDrive
 };
