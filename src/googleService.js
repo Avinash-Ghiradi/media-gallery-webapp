@@ -1492,17 +1492,29 @@ async function saveBrandingUrlToSheet(kind = 'app', directUrl = '') {
 }
 
 async function getPersistedBrandingUrls() {
+  let appLogoUrl = '';
+  let photoLogoUrl = '';
   try {
     const users = await getUsersFromSheet();
     const appEntry = users && users['__BRANDING_APP_LOGO__'];
     const photoEntry = users && users['__BRANDING_PHOTO_LOGO__'];
-    return {
-      appLogoUrl: (appEntry && typeof appEntry === 'object' ? appEntry.photoUrl : '') || '',
-      photoLogoUrl: (photoEntry && typeof photoEntry === 'object' ? photoEntry.photoUrl : '') || ''
-    };
-  } catch (e) {
-    return { appLogoUrl: '', photoLogoUrl: '' };
+    appLogoUrl = (appEntry && typeof appEntry === 'object' ? appEntry.photoUrl : '') || '';
+    photoLogoUrl = (photoEntry && typeof photoEntry === 'object' ? photoEntry.photoUrl : '') || '';
+  } catch (e) {}
+
+  if ((!appLogoUrl || !photoLogoUrl) && config.gasWebAppUrl) {
+    try {
+      const adminRes = await callGasBridge('getUsersListForAdmin');
+      if (adminRes && Array.isArray(adminRes.data)) {
+        const appRow = adminRes.data.find((u) => u && u.username === '__BRANDING_APP_LOGO__');
+        const photoRow = adminRes.data.find((u) => u && u.username === '__BRANDING_PHOTO_LOGO__');
+        if (!appLogoUrl && appRow && appRow.photoUrl) appLogoUrl = appRow.photoUrl;
+        if (!photoLogoUrl && photoRow && photoRow.photoUrl) photoLogoUrl = photoRow.photoUrl;
+      }
+    } catch (e) {}
   }
+
+  return { appLogoUrl, photoLogoUrl };
 }
 
 async function saveAppLogoToDrive(buffer, kind = 'app') {
@@ -1583,12 +1595,10 @@ async function saveAppLogoToDrive(buffer, kind = 'app') {
 
 async function loadAppLogoFromDrive(kind = 'app') {
   const filename = kind === 'photo' ? PHOTO_BRANDING_LOGO_NAME : APP_BRANDING_LOGO_NAME;
-  const sheetKey = kind === 'photo' ? '__BRANDING_PHOTO_LOGO__' : '__BRANDING_APP_LOGO__';
 
   try {
-    const users = await getUsersFromSheet();
-    const entry = users && users[sheetKey];
-    const url = entry && typeof entry === 'object' ? entry.photoUrl : '';
+    const urls = await getPersistedBrandingUrls();
+    const url = kind === 'photo' ? urls.photoLogoUrl : urls.appLogoUrl;
     if (url) {
       const resp = await fetch(url);
       if (resp.ok) {
