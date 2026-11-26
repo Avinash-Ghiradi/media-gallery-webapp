@@ -4,7 +4,7 @@ require('dotenv').config();
 module.exports = {
   port: process.env.PORT || 3000,
   sessionSecret: process.env.SESSION_SECRET || 'media-gallery-secret-key-change-me',
-  sessionTimeoutMs: (parseInt(process.env.SESSION_TIMEOUT_MINUTES, 10) || 30) * 60 * 1000,
+  sessionTimeoutMs: (parseInt(process.env.SESSION_TIMEOUT_MINUTES, 10) || 1440) * 60 * 1000,
 
   // Google Sheets & Drive IDs from environment or defaults
   usersSheetId: process.env.USERS_SHEET_ID || '14Qf8_lT3D61fbpRTGw1GRKxB2V0UccjBe2LDT0n5DME',
@@ -18,7 +18,7 @@ module.exports = {
   serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
   privateKey: process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined,
 
-  // Google Apps Script Web App Bridge URL (with built-in fallback)
+  // Optional Google Apps Script Web App Bridge URL
   gasWebAppUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbwbR9za-b4cKtq2XjdEMxjnum0HuNMm_6cBuUYpaRt1_LN5oBRYDk2Vl_OtX9QoXV4gvg/exec',
 
   defaultWatermark: process.env.DEFAULT_WATERMARK !== 'false'
