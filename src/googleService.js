@@ -431,6 +431,8 @@ let cachedEventFolders = null;
 let cachedEventFoldersAt = 0;
 let liveFolderSyncInFlight = false;
 
+const IGNORED_SYSTEM_FOLDERS = new Set(['_UserProfiles', '_AppBranding']);
+
 function refreshLiveFoldersInBackground() {
   if (liveFolderSyncInFlight || !config.gasWebAppUrl) return;
   liveFolderSyncInFlight = true;
@@ -439,7 +441,7 @@ function refreshLiveFoldersInBackground() {
       if (liveRes && Array.isArray(liveRes.data)) {
         cachedEventFolders = liveRes.data
           .map((ev) => ev && ev.name)
-          .filter((name) => name && name !== '_UserProfiles')
+          .filter((name) => name && !IGNORED_SYSTEM_FOLDERS.has(name))
           .sort();
         cachedEventFoldersAt = Date.now();
       }
@@ -464,7 +466,7 @@ async function getAllFolders() {
       else if (res && Array.isArray(res.folders)) list = res.folders;
 
       if (list) {
-        const cleaned = list.filter((n) => n && n !== '_UserProfiles').sort();
+        const cleaned = list.filter((n) => n && !IGNORED_SYSTEM_FOLDERS.has(n)).sort();
         cachedEventFolders = cleaned;
         cachedEventFoldersAt = Date.now();
         // Refresh exact live Drive-only folders in background without blocking dropdown
@@ -657,40 +659,8 @@ function findFirstEmptyCell(row, startIndex) {
 }
 
 async function getEventsFromSheet2() {
-  if (config.gasWebAppUrl) {
-    try {
-      const res = await callGasBridge('getEventsFromSheet2');
-      if (Array.isArray(res)) return res;
-      if (res && Array.isArray(res.data)) return res.data;
-    } catch (e) {
-      console.error('GAS getEventsFromSheet2 error:', e.message);
-    }
-  }
-
-  const sheets = getSheetsClient();
-  if (!sheets) return mockService.getEventsFromSheet2();
-
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.logSheetId,
-      range: 'Sheet2!A:A'
-    });
-
-    const rows = res.data.values || [];
-    const eventNames = [];
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] && rows[i][0].toString().trim() !== '') {
-        const cleanName = rows[i][0].toString().trim();
-        if (!eventNames.includes(cleanName)) {
-          eventNames.push(cleanName);
-        }
-      }
-    }
-    return eventNames.sort();
-  } catch (e) {
-    console.error('Error getting events from Sheet2:', e.message);
-    return getAllFolders();
-  }
+  // Always return live Drive folders so deleted events (e.g. 111) never appear in dropdowns
+  return await getAllFolders();
 }
 
 async function getFolderLinksFromSheet2() {
@@ -790,8 +760,33 @@ async function getRecentUploads() {
   if (config.gasWebAppUrl) {
     try {
       const res = await callGasBridge('getRecentUploads');
-      if (res && res.status === 'success') return res;
-      if (res && Array.isArray(res.data)) return { status: 'success', data: res.data };
+      if (res && res.status === 'success' && Array.isArray(res.data)) {
+        const filtered = res.data.filter((r) => r && !IGNORED_SYSTEM_FOLDERS.has(r.eventName));
+        if (filtered.length > 0) {
+          return { status: 'success', data: filtered };
+        }
+      }
+      // Fallback: if Sheet2's top recent rows were deleted or system folders, derive latest from live Drive folders
+      const liveEvents = await callGasBridge('getAllEventsForDeletion');
+      if (liveEvents && Array.isArray(liveEvents.data)) {
+        const flat = [];
+        liveEvents.data.forEach((ev) => {
+          if (!ev || IGNORED_SYSTEM_FOLDERS.has(ev.name)) return;
+          (ev.classes || []).forEach((cls) => {
+            if (cls && cls.url) {
+              flat.push({
+                eventName: ev.name,
+                className: cls.name,
+                folderUrl: cls.url,
+                uploadTime: cls.dateCreated || 'Recently',
+                isNew: false
+              });
+            }
+          });
+        });
+        return { status: 'success', data: flat.slice(0, 5) };
+      }
+      if (res && res.status === 'success') return { status: 'success', data: [] };
     } catch (e) {
       console.error('GAS getRecentUploads error:', e.message);
     }
@@ -1074,16 +1069,7 @@ async function removeEventFromAdditionalSheet(sheets, eventName) {
 }
 
 async function getEventsForWhatsApp() {
-  if (config.gasWebAppUrl) {
-    try {
-      const res = await callGasBridge('getEventsForWhatsApp');
-      if (res) return res;
-    } catch (e) {
-      console.error('GAS getEventsForWhatsApp error:', e.message);
-    }
-  }
-
-  const events = await getEventsFromSheet2();
+  const events = await getAllFolders();
   return { status: 'success', data: events };
 }
 
