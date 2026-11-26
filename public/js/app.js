@@ -1817,7 +1817,9 @@ async function enqueuePhotoForBackgroundUpload(file, eventName, className) {
       status: 'pending',
       createdAt: Date.now()
     });
-    await registerBackgroundSyncIfSupported();
+    if (document.visibilityState === 'hidden' || !navigator.onLine) {
+      await registerBackgroundSyncIfSupported();
+    }
     updateCameraQueueUI();
     processInstantCameraQueue();
   } catch (err) {
@@ -1857,62 +1859,74 @@ function handleDirectCameraCapture() {
 async function processInstantCameraQueue() {
   if (instantUploadingCount > 0) return;
 
-  let items = [];
-  try {
-    items = await idbGetAllUploads();
-  } catch (e) {
-    return;
-  }
-  if (!items.length) {
-    if (!liveCameraStream) releaseUploadWakeLock();
+  const runQueueStep = async () => {
+    let items = [];
+    try {
+      items = await idbGetAllUploads();
+    } catch (e) {
+      return false;
+    }
+    if (!items.length) {
+      if (!liveCameraStream) releaseUploadWakeLock();
+      updateCameraQueueUI();
+      return false;
+    }
+
+    const now = Date.now();
+    const item = items.find((it) => it.status !== 'uploading' || !it.startedAt || (now - it.startedAt) >= 120000);
+    if (!item) return false;
+
+    instantUploadingCount++;
+    requestUploadWakeLock();
+    item.status = 'uploading';
+    item.startedAt = Date.now();
+    await idbPutUpload(item);
     updateCameraQueueUI();
-    return;
-  }
 
-  const now = Date.now();
-  const item = items.find((it) => it.status !== 'uploading' || !it.startedAt || (now - it.startedAt) >= 120000);
-  if (!item) return;
+    try {
+      const formData = new FormData();
+      formData.append('eventName', item.eventName);
+      formData.append('className', item.className);
+      formData.append('addWatermark', item.addWatermark ? 'true' : 'false');
+      (item.files || []).forEach((f) => formData.append('files', f.blob, f.filename));
+      (item.originalFiles || []).forEach((f) => formData.append('originalFiles', f.blob, f.filename));
 
-  instantUploadingCount++;
-  requestUploadWakeLock();
-  item.status = 'uploading';
-  item.startedAt = Date.now();
-  await idbPutUpload(item);
-  updateCameraQueueUI();
+      const res = await fetch('/api/upload-multipart', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await res.json();
 
-  try {
-    const formData = new FormData();
-    formData.append('eventName', item.eventName);
-    formData.append('className', item.className);
-    formData.append('addWatermark', item.addWatermark ? 'true' : 'false');
-    (item.files || []).forEach((f) => formData.append('files', f.blob, f.filename));
-    (item.originalFiles || []).forEach((f) => formData.append('originalFiles', f.blob, f.filename));
-
-    const res = await fetch('/api/upload-multipart', {
-      method: 'POST',
-      body: formData
-    });
-    const result = await res.json();
-
-    if (res.ok && result && result.status === 'success') {
-      await idbDeleteUpload(item.id);
-      instantCompletedCount++;
-      loadEvents({ silent: true, preserveEvent: item.eventName, preserveClass: item.className });
-      loadRecentFolders();
-    } else {
+      if (res.ok && result && result.status === 'success') {
+        await idbDeleteUpload(item.id);
+        instantCompletedCount++;
+        loadEvents({ silent: true, preserveEvent: item.eventName, preserveClass: item.className });
+        loadRecentFolders();
+      } else {
+        item.status = 'pending';
+        await idbPutUpload(item);
+        instantFailedCount++;
+        showStatus(`Instant upload failed: ${(result && result.message) || res.status}`, 'error');
+      }
+    } catch (err) {
       item.status = 'pending';
       await idbPutUpload(item);
+      await registerBackgroundSyncIfSupported();
       instantFailedCount++;
-      showStatus(`Instant upload failed: ${(result && result.message) || res.status}`, 'error');
+    } finally {
+      instantUploadingCount--;
+      updateCameraQueueUI();
     }
-  } catch (err) {
-    item.status = 'pending';
-    await idbPutUpload(item);
-    await registerBackgroundSyncIfSupported();
-    instantFailedCount++;
-  } finally {
-    instantUploadingCount--;
-    updateCameraQueueUI();
+    return true;
+  };
+
+  let hadMore = false;
+  if (navigator.locks && typeof navigator.locks.request === 'function') {
+    hadMore = await navigator.locks.request('sg_upload_queue_lock', async () => runQueueStep());
+  } else {
+    hadMore = await runQueueStep();
+  }
+  if (hadMore) {
     setTimeout(() => processInstantCameraQueue(), 150);
   }
 }
