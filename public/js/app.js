@@ -1698,6 +1698,7 @@ async function openLiveCamera(selection) {
       audio: false
     });
     video.srcObject = liveCameraStream;
+    video.style.transform = liveCameraFacing === 'user' ? 'scaleX(-1)' : '';
     await video.play();
     liveFlashEnabled = false;
     updateLiveFlashButtonState();
@@ -1791,6 +1792,33 @@ function getBlobDimensions(blob) {
     img.onerror = () => {
       URL.revokeObjectURL(url);
       resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+function mirrorImageBlobHorizontal(blob, quality = 0.82) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((outBlob) => resolve(outBlob || blob), 'image/jpeg', quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
     };
     img.src = url;
   });
@@ -1924,7 +1952,8 @@ async function captureLiveCameraPhoto() {
         if (!dims || videoIsLandscape === null || photoIsLandscape === videoIsLandscape) {
           const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
           const compressed = await compressPhotoHighQuality(rawFile, 1600, 0.82);
-          const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.82) : compressed.blob;
+          const mirroredBlob = liveCameraFacing === 'user' ? await mirrorImageBlobHorizontal(compressed.blob, 0.82) : compressed.blob;
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(mirroredBlob, extraRotateDeg, 0.82) : mirroredBlob;
           const targetRatio = getLiveTargetAspectRatio();
           const croppedBlob = await cropImageToAspectRatio(orientedBlob, targetRatio, 0.82);
           const finalFile = new File([croppedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
@@ -1950,6 +1979,10 @@ async function captureLiveCameraPhoto() {
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
+    if (liveCameraFacing === 'user') {
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, 0, 0, w, h);
 
     await new Promise((resolve) => {
