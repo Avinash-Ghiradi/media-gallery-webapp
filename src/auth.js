@@ -1,26 +1,97 @@
+const crypto = require('crypto');
 const googleService = require('./googleService');
 const config = require('./config');
 
+const SIGNED_COOKIE_NAME = 'sg_auth';
+
+function signPayload(payloadB64) {
+  return crypto
+    .createHmac('sha256', config.sessionSecret)
+    .update(payloadB64)
+    .digest('base64url');
+}
+
+function setSignedSessionCookie(res, user) {
+  if (!res || !user) return;
+  try {
+    const payloadB64 = Buffer.from(JSON.stringify(user), 'utf8').toString('base64url');
+    const sig = signPayload(payloadB64);
+    res.cookie(SIGNED_COOKIE_NAME, `${payloadB64}.${sig}`, {
+      maxAge: config.sessionTimeoutMs,
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      path: '/'
+    });
+  } catch (e) {}
+}
+
+function clearSignedSessionCookie(res) {
+  if (!res) return;
+  res.clearCookie(SIGNED_COOKIE_NAME, { path: '/' });
+}
+
+function readSignedSessionCookie(req) {
+  try {
+    const rawCookie = req && req.headers && req.headers.cookie;
+    if (!rawCookie) return null;
+    const parts = rawCookie.split(';');
+    let token = '';
+    for (const part of parts) {
+      const idx = part.indexOf('=');
+      if (idx === -1) continue;
+      const name = part.slice(0, idx).trim();
+      if (name === SIGNED_COOKIE_NAME) {
+        token = decodeURIComponent(part.slice(idx + 1).trim());
+        break;
+      }
+    }
+    if (!token || !token.includes('.')) return null;
+    const [payloadB64, sig] = token.split('.');
+    if (!payloadB64 || !sig) return null;
+    const expectedSig = signPayload(payloadB64);
+    const sigBuf = Buffer.from(sig);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
+    const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!parsed || !parsed.username || !parsed.timestamp) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
- * Check session status
+ * Check session status (restores from signed cookie if server MemoryStore restarted)
  */
 function checkAuthStatus(req) {
-  if (req.session && req.session.user) {
+  let user = req.session && req.session.user ? req.session.user : null;
+  if (!user) {
+    const restored = readSignedSessionCookie(req);
+    if (restored) {
+      user = restored;
+      if (req.session) req.session.user = restored;
+    }
+  }
+
+  if (user) {
     const now = Date.now();
-    if (now - req.session.user.timestamp > config.sessionTimeoutMs) {
-      req.session.destroy();
+    if (now - user.timestamp > config.sessionTimeoutMs) {
+      if (req.session) req.session.destroy();
       return { isAuthenticated: false, username: '', assignedClass: '', timestamp: null };
     }
     // Update timestamp to extend session
-    req.session.user.timestamp = now;
+    user.timestamp = now;
     return {
       isAuthenticated: true,
-      username: req.session.user.username,
-      fullName: req.session.user.fullName || '',
-      assignedClass: req.session.user.assignedClass || '',
-      photoUrl: req.session.user.photoUrl || '',
-      details: req.session.user.details || '',
-      mustChangePassword: !!req.session.user.mustChangePassword,
+      username: user.username,
+      fullName: user.fullName || '',
+      assignedClass: user.assignedClass || '',
+      photoUrl: user.photoUrl || '',
+      details: user.details || '',
+      mustChangePassword: !!user.mustChangePassword,
       timestamp: now
     };
   }
@@ -144,10 +215,14 @@ function logoutUser(req) {
 function requireAuth(req, res, next) {
   const auth = checkAuthStatus(req);
   if (!auth.isAuthenticated) {
+    clearSignedSessionCookie(res);
     return res.status(401).json({
       status: 'error',
       message: 'Authentication required. Please login again.'
     });
+  }
+  if (req.session && req.session.user) {
+    setSignedSessionCookie(res, req.session.user);
   }
   next();
 }
@@ -155,6 +230,7 @@ function requireAuth(req, res, next) {
 function requireAdmin(req, res, next) {
   const auth = checkAuthStatus(req);
   if (!auth.isAuthenticated) {
+    clearSignedSessionCookie(res);
     return res.status(401).json({
       status: 'error',
       message: 'Authentication required. Please login again.'
@@ -166,6 +242,9 @@ function requireAdmin(req, res, next) {
       message: 'Admin access required.'
     });
   }
+  if (req.session && req.session.user) {
+    setSignedSessionCookie(res, req.session.user);
+  }
   next();
 }
 
@@ -174,5 +253,7 @@ module.exports = {
   authenticateUser,
   logoutUser,
   requireAuth,
-  requireAdmin
+  requireAdmin,
+  setSignedSessionCookie,
+  clearSignedSessionCookie
 };
