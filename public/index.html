@@ -38,6 +38,14 @@
         </div>
 
         <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <div class="input-wrapper">
+            <i class="fas fa-user input-icon-left"></i>
+            <input type="text" id="loginUsername" class="has-left-icon" placeholder="Enter username (optional for admin)" onkeypress="handleEnterKey(event)" autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group">
           <label for="password">Access Password</label>
           <div class="input-wrapper">
             <i class="fas fa-key input-icon-left"></i>
@@ -147,7 +155,7 @@
               </div>
               <div class="form-col">
                 <div class="form-group">
-                  <label for="className">Class</label>
+                  <label for="className">Class <span id="assignedClassBadge" class="assigned-class-badge" style="display: none;"></span></label>
                   <div class="input-wrapper">
                     <select id="className" onchange="handleClassSelectChange()">
                       <option value="">-- Select Class --</option>
