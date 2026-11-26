@@ -1437,6 +1437,25 @@ button {
   width: 100%;
 }
 
+.assigned-class-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+select:disabled {
+  background-color: var(--light-gray);
+  color: var(--slate);
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
 .copy-notification {
   position: fixed;
   top: 1rem;
