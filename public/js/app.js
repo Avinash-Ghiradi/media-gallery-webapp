@@ -16,6 +16,8 @@ let currentDeletion = {
   classIndex: -1
 };
 let currentUserAssignedClass = '';
+let currentUserProfile = { username: '', fullName: '', assignedClass: '', details: '', photoUrl: '' };
+let myProfilePendingPhoto = '';
 let deferredInstallPrompt = null;
 
 // Register Service Worker & handle PWA install prompt
@@ -148,7 +150,8 @@ async function checkAuthentication() {
         authStatus.assignedClass || '',
         authStatus.photoUrl || '',
         authStatus.fullName || '',
-        !!authStatus.mustChangePassword
+        !!authStatus.mustChangePassword,
+        authStatus.details || ''
       );
     } else {
       showLogin();
@@ -202,8 +205,15 @@ function applyAssignedClassLock() {
   }
 }
 
-function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '', fullName = '', mustChangePassword = false) {
+function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '', fullName = '', mustChangePassword = false, details = '') {
   currentUserAssignedClass = assignedClass || '';
+  currentUserProfile = {
+    username: username || '',
+    fullName: fullName || '',
+    assignedClass: assignedClass || '',
+    details: details || '',
+    photoUrl: photoUrl || ''
+  };
   const displayName = fullName || username || 'Admin';
   const classNote = currentUserAssignedClass ? ` (${currentUserAssignedClass})` : '';
   document.getElementById('user-name').textContent = 'Welcome, ' + displayName + classNote;
@@ -2270,5 +2280,138 @@ async function applyDefaultPasswordToAllNamedUsers() {
     }
   } catch (err) {
     showNoticePopup('Error: ' + err.message, '', 'Error');
+  }
+}
+
+/* ==========================================================================
+   MY PROFILE (SELF-SERVICE FOR ALL USERS)
+   ========================================================================== */
+
+function updateMyProfilePhotoPreview(src) {
+  const preview = document.getElementById('myProfilePhotoPreview');
+  const removeBtn = document.getElementById('removeMyProfilePhotoBtn');
+  if (!preview) return;
+  if (src) {
+    preview.innerHTML = `<img src="${src}" alt="My Profile Photo">`;
+    if (removeBtn) removeBtn.style.display = 'inline-flex';
+  } else {
+    preview.innerHTML = '<i class="fas fa-user"></i>';
+    if (removeBtn) removeBtn.style.display = 'none';
+  }
+}
+
+function clearMyProfilePhoto() {
+  myProfilePendingPhoto = '';
+  const input = document.getElementById('myProfilePhotoInput');
+  if (input) input.value = '';
+  updateMyProfilePhotoPreview('');
+}
+
+function handleMyProfilePhotoSelect() {
+  const input = document.getElementById('myProfilePhotoInput');
+  if (!input || !input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const size = 200;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const minSide = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - minSide) / 2, (img.height - minSide) / 2, minSide, minSide, 0, 0, size, size);
+      myProfilePendingPhoto = canvas.toDataURL('image/jpeg', 0.8);
+      updateMyProfilePhotoPreview(myProfilePendingPhoto);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function openMyProfileModal() {
+  const modal = document.getElementById('myProfileModal');
+  const errEl = document.getElementById('myProfileError');
+  if (errEl) errEl.style.display = 'none';
+
+  document.getElementById('myProfileUsername').value = currentUserProfile.username || '';
+  document.getElementById('myProfileClass').value = currentUserProfile.assignedClass || 'Admin (All Classes)';
+  document.getElementById('myProfileFullName').value = currentUserProfile.fullName || '';
+  document.getElementById('myProfileDetails').value = currentUserProfile.details || '';
+  document.getElementById('myProfileNewPassword').value = '';
+
+  myProfilePendingPhoto = currentUserProfile.photoUrl || '';
+  updateMyProfilePhotoPreview(myProfilePendingPhoto);
+
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeMyProfileModal() {
+  const modal = document.getElementById('myProfileModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveMyProfile() {
+  const fullName = document.getElementById('myProfileFullName').value.trim();
+  const details = document.getElementById('myProfileDetails').value.trim();
+  const newPassword = document.getElementById('myProfileNewPassword').value.trim();
+  const errEl = document.getElementById('myProfileError');
+  const btn = document.getElementById('saveMyProfileBtn');
+
+  if (newPassword && newPassword.length < 6) {
+    if (errEl) {
+      errEl.textContent = 'New password must be at least 6 characters.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+  if (newPassword === 'Success@123') {
+    if (errEl) {
+      errEl.textContent = 'Please choose a password different from Success@123.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  if (errEl) errEl.style.display = 'none';
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await apiCall('/api/auth/profile', 'POST', {
+      fullName,
+      details,
+      photoUrl: myProfilePendingPhoto,
+      newPassword
+    });
+    if (res && res.status === 'success') {
+      const updated = res.user || {};
+      currentUserProfile.fullName = updated.fullName !== undefined ? updated.fullName : fullName;
+      currentUserProfile.details = updated.details !== undefined ? updated.details : details;
+      currentUserProfile.photoUrl = updated.photoUrl !== undefined ? updated.photoUrl : myProfilePendingPhoto;
+
+      const displayName = currentUserProfile.fullName || currentUserProfile.username || 'Admin';
+      const classNote = currentUserProfile.assignedClass ? ` (${currentUserProfile.assignedClass})` : '';
+      document.getElementById('user-name').textContent = 'Welcome, ' + displayName + classNote;
+
+      const headerAvatar = document.getElementById('headerUserAvatar');
+      if (headerAvatar) {
+        headerAvatar.innerHTML = currentUserProfile.photoUrl
+          ? `<img src="${currentUserProfile.photoUrl}" alt="${displayName}" class="user-avatar-img">`
+          : '<i class="fas fa-user-shield"></i>';
+      }
+
+      closeMyProfileModal();
+      showCopyNotification(res.message || 'Profile updated!');
+    } else if (errEl) {
+      errEl.textContent = (res && res.message) || 'Failed to update profile';
+      errEl.style.display = 'block';
+    }
+  } catch (err) {
+    if (errEl) {
+      errEl.textContent = 'Error: ' + err.message;
+      errEl.style.display = 'block';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
