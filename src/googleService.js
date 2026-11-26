@@ -133,13 +133,13 @@ async function getUsersFromSheet() {
     const users = {};
     for (let i = startRow; i < rows.length; i++) {
       const row = rows[i];
-      if (row[0] && row[1]) {
+      const fullName = row[5] ? row[5].toString().trim() : '';
+      const pwd = row[1] ? row[1].toString().trim() : (fullName ? 'Success@123' : '');
+      if (row[0] && pwd) {
         const uname = row[0].toString().trim();
-        const pwd = row[1].toString().trim();
         const assignedClass = row[2] ? row[2].toString().trim() : '';
         const details = row[3] ? row[3].toString().trim() : '';
         const photoUrl = row[4] ? row[4].toString().trim() : '';
-        const fullName = row[5] ? row[5].toString().trim() : '';
         users[uname] = { password: pwd, assignedClass, details, photoUrl, fullName };
       }
     }
@@ -1153,6 +1153,84 @@ async function deleteUser(username) {
   }
 }
 
+async function changeUserPassword(username, newPassword) {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('changeUserPassword', { username, newPassword });
+      if (res && res.status) return res;
+    } catch (e) {
+      console.error('GAS changeUserPassword error:', e.message);
+    }
+  }
+
+  const sheets = getSheetsClient();
+  if (!sheets) return mockService.changeUserPassword(username, newPassword);
+
+  try {
+    await ensureUsersSheetExists(sheets);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:F`
+    });
+    const rows = response.data.values || [];
+    const cleanUser = username.toString().trim().toLowerCase();
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] && rows[i][0].toString().trim().toLowerCase() === cleanUser) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: config.usersSheetId,
+          range: `${config.usersSheetName}!B${i + 1}`,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [[newPassword.toString().trim()]] }
+        });
+        return { status: 'success', message: 'Password updated successfully.' };
+      }
+    }
+    return { status: 'error', message: 'User not found' };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
+async function applyDefaultPasswordToNamedUsers() {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('applyDefaultPasswordToNamedUsers');
+      if (res && res.status) return res;
+    } catch (e) {
+      console.error('GAS applyDefaultPasswordToNamedUsers error:', e.message);
+    }
+  }
+
+  const sheets = getSheetsClient();
+  if (!sheets) return mockService.applyDefaultPasswordToNamedUsers();
+
+  try {
+    await ensureUsersSheetExists(sheets);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A:F`
+    });
+    const rows = response.data.values || [];
+    let updated = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const fullName = rows[i][5] ? rows[i][5].toString().trim() : '';
+      if (rows[i][0] && fullName) {
+        rows[i][1] = 'Success@123';
+        updated++;
+      }
+    }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.usersSheetId,
+      range: `${config.usersSheetName}!A1`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: rows }
+    });
+    return { status: 'success', message: `Default password (Success@123) applied to ${updated} user(s) with Full Name.` };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+}
+
 module.exports = {
   isConfigured: () => {
     initGoogleAuth();
@@ -1162,6 +1240,8 @@ module.exports = {
   getUsersListForAdmin,
   addOrUpdateUser,
   deleteUser,
+  changeUserPassword,
+  applyDefaultPasswordToNamedUsers,
   getAllFolders,
   getSubfoldersForEvent,
   uploadFilesToDrive,
