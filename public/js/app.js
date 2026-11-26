@@ -15,6 +15,40 @@ let currentDeletion = {
   eventIndex: -1,
   classIndex: -1
 };
+let deferredInstallPrompt = null;
+
+// Register Service Worker & handle PWA install prompt
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('Service worker registration failed:', err);
+    });
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const installBtn = document.getElementById('installAppBtn');
+  if (installBtn) installBtn.style.display = 'inline-flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const installBtn = document.getElementById('installAppBtn');
+  if (installBtn) installBtn.style.display = 'none';
+});
+
+async function installPWA() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    deferredInstallPrompt = null;
+    const installBtn = document.getElementById('installAppBtn');
+    if (installBtn) installBtn.style.display = 'none';
+  }
+}
 
 // Helper for API fetch calls
 async function apiCall(endpoint, method = 'GET', data = null) {
@@ -975,8 +1009,8 @@ function handleDirectCameraCapture() {
   if (!selection) return;
 
   const file = cameraInput.files[0];
-  if (file.size > 50 * 1024 * 1024) {
-    showStatus('Captured photo exceeds 50MB limit and cannot be uploaded', 'error');
+  if (file.size > 500 * 1024 * 1024) {
+    showStatus('Captured photo exceeds 500MB limit and cannot be uploaded', 'error');
     cameraInput.value = '';
     return;
   }
@@ -1014,6 +1048,21 @@ function uploadFiles() {
   processAndUploadFiles(selectedFiles, selection.eventName, selection.className, false);
 }
 
+// Convert base64 string to Blob for multipart upload
+function base64ToBlob(base64, contentType) {
+  const byteCharacters = atob(base64);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += 8192) {
+    const slice = byteCharacters.slice(offset, offset + 8192);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    byteArrays.push(new Uint8Array(byteNumbers));
+  }
+  return new Blob(byteArrays, { type: contentType || 'application/octet-stream' });
+}
+
 // Shared processing & upload pipeline for both manual and instant camera uploads
 function processAndUploadFiles(filesToUpload, eventName, className, isInstantCamera = false) {
   const loading = document.getElementById('loading');
@@ -1031,45 +1080,85 @@ function processAndUploadFiles(filesToUpload, eventName, className, isInstantCam
     'success'
   );
 
-  const processedFiles = [];
+  const preparedBlobs = [];
   let processedCount = 0;
 
   filesToUpload.forEach((file, index) => {
     if (file.type.startsWith('image/') && watermarkEnabled) {
       addWatermarkToImage(file, eventName, className, function(watermarkedFile) {
-        processedFiles[index] = watermarkedFile;
+        preparedBlobs[index] = {
+          blob: base64ToBlob(watermarkedFile.data, watermarkedFile.contentType),
+          filename: watermarkedFile.filename
+        };
         processedCount++;
-        updateProgress((processedCount / filesToUpload.length) * 100);
+        updateProgress((processedCount / filesToUpload.length) * 30);
 
         if (processedCount === filesToUpload.length) {
-          uploadToDrive(processedFiles, eventName, className);
+          uploadToDrive(preparedBlobs, eventName, className);
         }
       });
     } else {
-      readFileAsDataURL(file).then(result => {
-        processedFiles[index] = result;
-        processedCount++;
-        updateProgress((processedCount / filesToUpload.length) * 100);
+      preparedBlobs[index] = {
+        blob: file,
+        filename: file.name
+      };
+      processedCount++;
+      updateProgress((processedCount / filesToUpload.length) * 30);
 
-        if (processedCount === filesToUpload.length) {
-          uploadToDrive(processedFiles, eventName, className);
-        }
-      });
+      if (processedCount === filesToUpload.length) {
+        uploadToDrive(preparedBlobs, eventName, className);
+      }
     }
   });
 }
 
-async function uploadToDrive(filesData, eventName, className) {
-  const validFilesData = filesData.filter(file => file !== undefined);
+function uploadMultipartWithProgress(formData) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload-multipart', true);
+
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable) {
+        const uploadPct = 30 + (e.loaded / e.total) * 70;
+        updateProgress(uploadPct);
+      }
+    };
+
+    xhr.onload = function() {
+      try {
+        const json = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(json);
+        } else {
+          reject(new Error((json && json.message) || `Server error (${xhr.status})`));
+        }
+      } catch (err) {
+        reject(new Error(`Server error (${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = function() {
+      reject(new Error('Network error during upload. Please check your connection.'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+async function uploadToDrive(preparedBlobs, eventName, className) {
+  const validItems = preparedBlobs.filter(item => item !== undefined);
   const takePhotoBtn = document.getElementById('takePhotoBtn');
 
   try {
-    const result = await apiCall('/api/upload', 'POST', {
-      filesData: validFilesData,
-      eventName: eventName,
-      className: className,
-      addWatermark: watermarkEnabled
+    const formData = new FormData();
+    formData.append('eventName', eventName);
+    formData.append('className', className);
+    formData.append('addWatermark', watermarkEnabled ? 'true' : 'false');
+    validItems.forEach((item) => {
+      formData.append('files', item.blob, item.filename);
     });
+
+    const result = await uploadMultipartWithProgress(formData);
 
     const loading = document.getElementById('loading');
     const progressContainer = document.getElementById('progressContainer');
@@ -1172,12 +1261,12 @@ function processFiles(files) {
     return;
   }
 
-  const oversizedFiles = supportedFiles.filter(file => file.size > 50 * 1024 * 1024);
+  const oversizedFiles = supportedFiles.filter(file => file.size > 500 * 1024 * 1024);
   if (oversizedFiles.length > 0) {
-    showStatus(`Some files exceed 50MB limit and won't be uploaded: ${oversizedFiles.map(f => f.name).join(', ')}`, 'warning');
+    showStatus(`Some files exceed 500MB limit and won't be uploaded: ${oversizedFiles.map(f => f.name).join(', ')}`, 'warning');
   }
 
-  const validFiles = supportedFiles.filter(file => file.size <= 50 * 1024 * 1024);
+  const validFiles = supportedFiles.filter(file => file.size <= 500 * 1024 * 1024);
   validFiles.forEach(file => {
     if (!selectedFiles.some(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified)) {
       selectedFiles.push(file);
