@@ -367,20 +367,50 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
   }
 }
 
-async function getAllFolders() {
-  if (config.gasWebAppUrl) {
-    try {
-      const liveRes = await callGasBridge('getAllEventsForDeletion');
+let cachedEventFolders = null;
+let cachedEventFoldersAt = 0;
+let liveFolderSyncInFlight = false;
+
+function refreshLiveFoldersInBackground() {
+  if (liveFolderSyncInFlight || !config.gasWebAppUrl) return;
+  liveFolderSyncInFlight = true;
+  callGasBridge('getAllEventsForDeletion')
+    .then((liveRes) => {
       if (liveRes && Array.isArray(liveRes.data)) {
-        return liveRes.data
+        cachedEventFolders = liveRes.data
           .map((ev) => ev && ev.name)
           .filter((name) => name && name !== '_UserProfiles')
           .sort();
+        cachedEventFoldersAt = Date.now();
       }
+    })
+    .catch(() => {})
+    .finally(() => {
+      liveFolderSyncInFlight = false;
+    });
+}
+
+async function getAllFolders() {
+  if (cachedEventFolders && (Date.now() - cachedEventFoldersAt) < 60000) {
+    return cachedEventFolders;
+  }
+
+  if (config.gasWebAppUrl) {
+    try {
       const res = await callGasBridge('getAllFolders');
-      if (Array.isArray(res)) return res.filter((n) => n !== '_UserProfiles');
-      if (res && Array.isArray(res.data)) return res.data.filter((n) => n !== '_UserProfiles');
-      if (res && Array.isArray(res.folders)) return res.folders.filter((n) => n !== '_UserProfiles');
+      let list = null;
+      if (Array.isArray(res)) list = res;
+      else if (res && Array.isArray(res.data)) list = res.data;
+      else if (res && Array.isArray(res.folders)) list = res.folders;
+
+      if (list) {
+        const cleaned = list.filter((n) => n && n !== '_UserProfiles').sort();
+        cachedEventFolders = cleaned;
+        cachedEventFoldersAt = Date.now();
+        // Refresh exact live Drive-only folders in background without blocking dropdown
+        refreshLiveFoldersInBackground();
+        return cleaned;
+      }
     } catch (e) {
       console.error('GAS getAllFolders error:', e.message);
     }
