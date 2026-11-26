@@ -1188,6 +1188,80 @@ button {
   width: auto;
   max-width: 200px;
   object-fit: contain;
+  animation: logoFloat 3s ease-in-out infinite;
+}
+
+/* Animated App Splash Logo Overlay */
+.app-splash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+
+.app-splash-overlay.fade-out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-logo-wrap {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(217, 119, 6, 0.28);
+  animation: splashRingPulse 1.4s ease-out infinite;
+}
+
+.splash-logo {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  animation: splashLogoIn 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards, logoFloat 2.6s ease-in-out 0.75s infinite;
+}
+
+.splash-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #1e293b;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  animation: splashTitleIn 0.6s ease 0.25s forwards;
+}
+
+@keyframes splashLogoIn {
+  0% { opacity: 0; transform: scale(0.65) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes splashTitleIn {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splashRingPulse {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 .login-logo-fallback {
