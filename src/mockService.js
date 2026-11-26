@@ -10,12 +10,52 @@ let mockEvents = {};
 
 let recentUploadsLog = [];
 
+let mockUsers = [
+  { username: 'admin', password: 'password123', assignedClass: '', details: 'Administrator' },
+  { username: 'Avinash', password: 'Avinash123', assignedClass: '', details: 'Administrator' },
+  { username: 'Jyoti S', password: 'Mahi@0412', assignedClass: '', details: 'Administrator' }
+];
+
 function getUsersFromSheet() {
-  return {
-    'admin': 'password123',
-    'Avinash': 'Avinash123',
-    'Jyoti S': 'Mahi@0412'
-  };
+  const map = {};
+  mockUsers.forEach((u) => {
+    map[u.username] = { password: u.password, assignedClass: u.assignedClass || '' };
+  });
+  return map;
+}
+
+function getUsersListForAdmin() {
+  return { status: 'success', data: mockUsers };
+}
+
+function addOrUpdateUser(username, password, assignedClass = '', details = '') {
+  const cleanUser = (username || '').trim();
+  const cleanPass = (password || '').trim();
+  if (!cleanUser || !cleanPass) {
+    return { status: 'error', message: 'Username and password are required' };
+  }
+  const existing = mockUsers.find((u) => u.username.toLowerCase() === cleanUser.toLowerCase());
+  if (existing) {
+    existing.password = cleanPass;
+    existing.assignedClass = (assignedClass || '').trim();
+    existing.details = (details || '').trim();
+    return { status: 'success', message: `User "${cleanUser}" updated.` };
+  }
+  mockUsers.push({
+    username: cleanUser,
+    password: cleanPass,
+    assignedClass: (assignedClass || '').trim(),
+    details: (details || '').trim()
+  });
+  return { status: 'success', message: `User "${cleanUser}" added.` };
+}
+
+function deleteUser(username) {
+  const cleanUser = (username || '').trim().toLowerCase();
+  const idx = mockUsers.findIndex((u) => u.username.toLowerCase() === cleanUser);
+  if (idx === -1) return { status: 'error', message: 'User not found' };
+  mockUsers.splice(idx, 1);
+  return { status: 'success', message: `User "${username}" deleted.` };
 }
 
 function getAllFolders() {
@@ -277,6 +317,9 @@ ${fileCount > 0 ? `📊 *Total Files:* ${fileCount}` : '📊 Files are being upl
 
 module.exports = {
   getUsersFromSheet,
+  getUsersListForAdmin,
+  addOrUpdateUser,
+  deleteUser,
   getAllFolders,
   getSubfoldersForEvent,
   uploadFilesToDrive,
