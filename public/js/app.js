@@ -1307,6 +1307,118 @@ function getSelectedEventAndClass() {
 let liveCameraStream = null;
 let liveCameraFacing = 'environment';
 let liveCameraSelection = null;
+let livePendingReviewFile = null;
+let livePendingReviewUrl = '';
+let uploadWakeLock = null;
+
+// Screen Wake Lock helper to keep uploads running reliably on mobile
+async function requestUploadWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !uploadWakeLock) {
+      uploadWakeLock = await navigator.wakeLock.request('screen');
+      uploadWakeLock.addEventListener('release', () => {
+        uploadWakeLock = null;
+      });
+    }
+  } catch (e) {}
+}
+
+function releaseUploadWakeLock() {
+  try {
+    if (uploadWakeLock) {
+      uploadWakeLock.release();
+      uploadWakeLock = null;
+    }
+  } catch (e) {}
+}
+
+// Persistent IndexedDB Queue (survives app minimize, screen off, sleep & tab close)
+const IDB_NAME = 'SuccessGalleryUploadDB';
+const IDB_STORE = 'pendingUploads';
+
+function openClientUploadDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPutUpload(item) {
+  const db = await openClientUploadDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(item);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbGetAllUploads() {
+  const db = await openClientUploadDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbDeleteUpload(id) {
+  const db = await openClientUploadDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function registerBackgroundSyncIfSupported() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && 'sync' in reg) {
+        await reg.sync.register('upload-pending-photos');
+      } else if (reg && reg.active) {
+        reg.active.postMessage({ type: 'TRIGGER_BG_UPLOAD' });
+      }
+    }
+  } catch (e) {}
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'BG_UPLOAD_DONE') {
+      instantCompletedCount++;
+      updateCameraQueueUI();
+      loadEvents({ silent: true, preserveEvent: event.data.eventName, preserveClass: event.data.className });
+      loadRecentFolders();
+    }
+  });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    registerBackgroundSyncIfSupported();
+  } else if (document.visibilityState === 'visible') {
+    processInstantCameraQueue();
+  }
+});
+
+window.addEventListener('online', () => {
+  processInstantCameraQueue();
+});
+
+window.addEventListener('load', () => {
+  setTimeout(() => processInstantCameraQueue(), 1200);
+});
 
 // Open in-app continuous camera viewfinder (falls back to native file input if unavailable)
 async function triggerDirectCamera() {
@@ -1340,15 +1452,18 @@ async function openLiveCamera(selection) {
   if (destLabel && selection) {
     destLabel.textContent = `${selection.eventName} > ${selection.className}`;
   }
+  cancelLiveCapturedPhoto();
   updateCameraQueueUI();
+  requestUploadWakeLock();
 
   try {
     stopLiveCameraStream();
     liveCameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: liveCameraFacing },
-        width: { ideal: 2560 },
-        height: { ideal: 1920 }
+        width: { ideal: 4096 },
+        height: { ideal: 3072 },
+        focusMode: { ideal: 'continuous' }
       },
       audio: false
     });
@@ -1372,9 +1487,13 @@ function stopLiveCameraStream() {
 }
 
 function closeLiveCamera() {
+  cancelLiveCapturedPhoto();
   stopLiveCameraStream();
   const modal = document.getElementById('liveCameraModal');
   if (modal) modal.style.display = 'none';
+  if (instantUploadingCount === 0) {
+    releaseUploadWakeLock();
+  }
 }
 
 async function switchLiveCameraFacing() {
@@ -1384,46 +1503,98 @@ async function switchLiveCameraFacing() {
   }
 }
 
-function captureLiveCameraPhoto() {
+function showLiveReviewOverlay(file) {
+  cancelLiveCapturedPhoto();
+  livePendingReviewFile = file;
+  livePendingReviewUrl = URL.createObjectURL(file);
+  const img = document.getElementById('liveCameraReviewImg');
+  const overlay = document.getElementById('liveCameraReviewOverlay');
+  if (img) img.src = livePendingReviewUrl;
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function cancelLiveCapturedPhoto() {
+  const overlay = document.getElementById('liveCameraReviewOverlay');
+  const img = document.getElementById('liveCameraReviewImg');
+  if (overlay) overlay.style.display = 'none';
+  if (img) img.src = '';
+  if (livePendingReviewUrl) {
+    URL.revokeObjectURL(livePendingReviewUrl);
+    livePendingReviewUrl = '';
+  }
+  livePendingReviewFile = null;
+}
+
+async function confirmLiveCapturedPhoto() {
+  if (!livePendingReviewFile || !liveCameraSelection) {
+    cancelLiveCapturedPhoto();
+    return;
+  }
+  const file = livePendingReviewFile;
+  const selection = { ...liveCameraSelection };
+  cancelLiveCapturedPhoto();
+  await enqueuePhotoForBackgroundUpload(file, selection.eventName, selection.className);
+}
+
+async function captureLiveCameraPhoto() {
   const video = document.getElementById('liveCameraVideo');
   const flash = document.getElementById('liveCameraFlash');
-  if (!video || !video.videoWidth || !video.videoHeight || !liveCameraSelection) return;
+  const shutterBtn = document.getElementById('liveShutterBtn');
+  if (!video || !liveCameraSelection) return;
 
   if (flash) {
     flash.classList.add('active');
     setTimeout(() => flash.classList.remove('active'), 140);
   }
+  if (shutterBtn) shutterBtn.disabled = true;
 
-  const maxDim = 2560;
-  const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
-  const w = Math.max(1, Math.round(video.videoWidth * scale));
-  const h = Math.max(1, Math.round(video.videoHeight * scale));
-
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(video, 0, 0, w, h);
-
-  canvas.toBlob((blob) => {
-    if (!blob) return;
+  try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const uniqueSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const capturedFile = new File([blob], `photo_${timestamp}_${uniqueSuffix}.jpg`, {
-      type: 'image/jpeg',
-      lastModified: Date.now()
-    });
+    const fileName = `photo_${timestamp}_${uniqueSuffix}.jpg`;
 
-    instantCameraQueue.push({
-      file: capturedFile,
-      eventName: liveCameraSelection.eventName,
-      className: liveCameraSelection.className
+    // Prefer full-resolution ImageCapture API for crisp, clear camera photos
+    const track = liveCameraStream && liveCameraStream.getVideoTracks()[0];
+    if (track && typeof ImageCapture === 'function') {
+      try {
+        const imageCapture = new ImageCapture(track);
+        const rawBlob = await imageCapture.takePhoto();
+        const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
+        const compressed = await compressPhotoHighQuality(rawFile, 2560, 0.92);
+        const finalFile = new File([compressed.blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+        showLiveReviewOverlay(finalFile);
+        return;
+      } catch (icErr) {
+        console.warn('ImageCapture fallback to video frame:', icErr.message);
+      }
+    }
+
+    if (!video.videoWidth || !video.videoHeight) return;
+    const maxDim = 2560;
+    const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+    const w = Math.max(1, Math.round(video.videoWidth * scale));
+    const h = Math.max(1, Math.round(video.videoHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(video, 0, 0, w, h);
+
+    await new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const capturedFile = new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          showLiveReviewOverlay(capturedFile);
+        }
+        resolve();
+      }, 'image/jpeg', 0.92);
     });
-    updateCameraQueueUI();
-    processInstantCameraQueue();
-  }, 'image/jpeg', 0.88);
+  } finally {
+    if (shutterBtn) shutterBtn.disabled = false;
+  }
 }
 
 let instantCameraQueue = [];
@@ -1431,10 +1602,15 @@ let instantUploadingCount = 0;
 let instantCompletedCount = 0;
 let instantFailedCount = 0;
 
-function updateCameraQueueUI() {
+async function updateCameraQueueUI() {
   const box = document.getElementById('cameraQueueStatus');
   const liveText = document.getElementById('liveCameraQueueText');
-  const pending = instantCameraQueue.length + instantUploadingCount;
+  let idbPending = 0;
+  try {
+    const items = await idbGetAllUploads();
+    idbPending = items.length;
+  } catch (e) {}
+  const pending = Math.max(idbPending, instantCameraQueue.length + instantUploadingCount);
   const parts = [];
   if (pending > 0) parts.push(`<i class="fas fa-spinner fa-spin"></i> Uploading ${pending} photo(s)...`);
   if (instantCompletedCount > 0) parts.push(`<span style="color: var(--success);">✅ ${instantCompletedCount} uploaded</span>`);
@@ -1451,6 +1627,46 @@ function updateCameraQueueUI() {
   }
   box.style.display = 'block';
   box.innerHTML = parts.join(' &nbsp;•&nbsp; ');
+}
+
+async function enqueuePhotoForBackgroundUpload(file, eventName, className) {
+  requestUploadWakeLock();
+  const id = `up_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    const compressedOriginal = await compressPhotoHighQuality(file, 2560, 0.92);
+    const files = [];
+    const originalFiles = [];
+
+    if (watermarkEnabled) {
+      const watermarked = await new Promise((resolve) => {
+        addWatermarkToImage(file, eventName, className, resolve);
+      });
+      const wmBlob = base64ToBlob(watermarked.data, watermarked.contentType);
+      files.push({ blob: wmBlob, filename: watermarked.filename });
+      originalFiles.push({ blob: compressedOriginal.blob, filename: compressedOriginal.filename });
+    } else {
+      files.push({ blob: compressedOriginal.blob, filename: compressedOriginal.filename });
+    }
+
+    await idbPutUpload({
+      id,
+      eventName,
+      className,
+      addWatermark: watermarkEnabled,
+      files,
+      originalFiles,
+      status: 'pending',
+      createdAt: Date.now()
+    });
+    await registerBackgroundSyncIfSupported();
+    updateCameraQueueUI();
+    processInstantCameraQueue();
+  } catch (err) {
+    instantFailedCount++;
+    updateCameraQueueUI();
+    showStatus('Error queueing photo: ' + err.message, 'error');
+  }
 }
 
 // Immediately queue captured photo for background compression & upload without blocking next shot
@@ -1476,51 +1692,43 @@ function handleDirectCameraCapture() {
     lastModified: file.lastModified
   });
 
-  instantCameraQueue.push({
-    file: renamedFile,
-    eventName: selection.eventName,
-    className: selection.className
-  });
-  updateCameraQueueUI();
-  processInstantCameraQueue();
-
+  enqueuePhotoForBackgroundUpload(renamedFile, selection.eventName, selection.className);
   cameraInput.value = '';
-  const continuousToggle = document.getElementById('continuousCameraToggle');
-  if (continuousToggle && continuousToggle.checked) {
-    showCopyNotification('Uploading in background! Ready for next photo.');
-    // Attempt to re-open camera automatically for continuous shooting where browser permits
-    setTimeout(() => {
-      try {
-        cameraInput.click();
-      } catch (e) {}
-    }, 350);
-  }
 }
 
 async function processInstantCameraQueue() {
-  if (instantUploadingCount > 0 || instantCameraQueue.length === 0) return;
+  if (instantUploadingCount > 0) return;
 
-  const item = instantCameraQueue.shift();
+  let items = [];
+  try {
+    items = await idbGetAllUploads();
+  } catch (e) {
+    return;
+  }
+  if (!items.length) {
+    if (!liveCameraStream) releaseUploadWakeLock();
+    updateCameraQueueUI();
+    return;
+  }
+
+  const now = Date.now();
+  const item = items.find((it) => it.status !== 'uploading' || !it.startedAt || (now - it.startedAt) >= 120000);
+  if (!item) return;
+
   instantUploadingCount++;
+  requestUploadWakeLock();
+  item.status = 'uploading';
+  item.startedAt = Date.now();
+  await idbPutUpload(item);
   updateCameraQueueUI();
 
   try {
-    const compressedOriginal = await compressPhotoHighQuality(item.file);
     const formData = new FormData();
     formData.append('eventName', item.eventName);
     formData.append('className', item.className);
-    formData.append('addWatermark', watermarkEnabled ? 'true' : 'false');
-
-    if (watermarkEnabled) {
-      const watermarked = await new Promise((resolve) => {
-        addWatermarkToImage(item.file, item.eventName, item.className, resolve);
-      });
-      const wmBlob = base64ToBlob(watermarked.data, watermarked.contentType);
-      formData.append('files', wmBlob, watermarked.filename);
-      formData.append('originalFiles', compressedOriginal.blob, compressedOriginal.filename);
-    } else {
-      formData.append('files', compressedOriginal.blob, compressedOriginal.filename);
-    }
+    formData.append('addWatermark', item.addWatermark ? 'true' : 'false');
+    (item.files || []).forEach((f) => formData.append('files', f.blob, f.filename));
+    (item.originalFiles || []).forEach((f) => formData.append('originalFiles', f.blob, f.filename));
 
     const res = await fetch('/api/upload-multipart', {
       method: 'POST',
@@ -1529,22 +1737,25 @@ async function processInstantCameraQueue() {
     const result = await res.json();
 
     if (res.ok && result && result.status === 'success') {
+      await idbDeleteUpload(item.id);
       instantCompletedCount++;
       loadEvents({ silent: true, preserveEvent: item.eventName, preserveClass: item.className });
       loadRecentFolders();
     } else {
+      item.status = 'pending';
+      await idbPutUpload(item);
       instantFailedCount++;
       showStatus(`Instant upload failed: ${(result && result.message) || res.status}`, 'error');
     }
   } catch (err) {
+    item.status = 'pending';
+    await idbPutUpload(item);
+    await registerBackgroundSyncIfSupported();
     instantFailedCount++;
-    showStatus('Instant upload error: ' + err.message, 'error');
   } finally {
     instantUploadingCount--;
     updateCameraQueueUI();
-    if (instantCameraQueue.length > 0) {
-      processInstantCameraQueue();
-    }
+    setTimeout(() => processInstantCameraQueue(), 150);
   }
 }
 
