@@ -1474,6 +1474,12 @@ function extractDriveDirectImageUrl(url) {
 
 async function saveBrandingUrlToSheet(kind = 'app', directUrl = '') {
   if (!directUrl) return null;
+  if (config.gasWebAppUrl) {
+    try {
+      const bRes = await callGasBridge('saveBrandingToSheet', { kind, url: directUrl });
+      if (bRes && bRes.status === 'success') return directUrl;
+    } catch (e) {}
+  }
   const sheetKey = kind === 'photo' ? '__BRANDING_PHOTO_LOGO__' : '__BRANDING_APP_LOGO__';
   try {
     await addOrUpdateUser({
@@ -1494,12 +1500,22 @@ async function saveBrandingUrlToSheet(kind = 'app', directUrl = '') {
 async function getPersistedBrandingUrls() {
   let appLogoUrl = '';
   let photoLogoUrl = '';
+  if (config.gasWebAppUrl) {
+    try {
+      const bRes = await callGasBridge('getBrandingFromSheet');
+      if (bRes && bRes.status === 'success') {
+        appLogoUrl = bRes.appLogoUrl || '';
+        photoLogoUrl = bRes.photoLogoUrl || '';
+        if (appLogoUrl && photoLogoUrl) return { appLogoUrl, photoLogoUrl };
+      }
+    } catch (e) {}
+  }
   try {
     const users = await getUsersFromSheet();
     const appEntry = users && users['__BRANDING_APP_LOGO__'];
     const photoEntry = users && users['__BRANDING_PHOTO_LOGO__'];
-    appLogoUrl = (appEntry && typeof appEntry === 'object' ? appEntry.photoUrl : '') || '';
-    photoLogoUrl = (photoEntry && typeof photoEntry === 'object' ? photoEntry.photoUrl : '') || '';
+    if (!appLogoUrl) appLogoUrl = (appEntry && typeof appEntry === 'object' ? appEntry.photoUrl : '') || '';
+    if (!photoLogoUrl) photoLogoUrl = (photoEntry && typeof photoEntry === 'object' ? photoEntry.photoUrl : '') || '';
   } catch (e) {}
 
   if ((!appLogoUrl || !photoLogoUrl) && config.gasWebAppUrl) {
@@ -1539,14 +1555,7 @@ async function saveAppLogoToDrive(buffer, kind = 'app') {
       const rawUrl = gasRes && Array.isArray(gasRes.urls) && gasRes.urls[0] && gasRes.urls[0].url;
       const directUrl = extractDriveDirectImageUrl(rawUrl);
       if (directUrl) {
-        await addOrUpdateUser({
-          username: sheetKey,
-          password: `disabled_${Date.now()}`,
-          assignedClass: '',
-          details: 'System Branding Config',
-          photoUrl: directUrl,
-          fullName: sheetKey
-        });
+        await saveBrandingUrlToSheet(kind, directUrl);
         return directUrl;
       }
     } catch (gasErr) {
@@ -1663,5 +1672,6 @@ module.exports = {
   saveAppLogoToDrive,
   loadAppLogoFromDrive,
   saveBrandingUrlToSheet,
-  getPersistedBrandingUrls
+  getPersistedBrandingUrls,
+  extractDriveDirectImageUrl
 };
