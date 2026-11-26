@@ -1872,3 +1872,19 @@ input:checked + .slider:before {
     margin-bottom: 1rem;
   }
 }
+
+.notice-modal-header {
+  background: var(--warning-light);
+  color: #b45309;
+  border-bottom: 1px solid #fde68a;
+}
+
+.notice-modal-header i {
+  color: var(--warning);
+}
+
+.notice-ok-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 44px;
+}
