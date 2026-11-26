@@ -451,11 +451,15 @@
               <div class="user-photo-preview" id="appLogoAdminPreview" style="border-radius: var(--radius-sm); width: 84px; height: 64px; background: var(--white);">
                 <img id="appLogoAdminImg" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="App Logo" style="object-fit: contain; padding: 4px;">
               </div>
-              <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start;">
+              <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start; width: 100%;">
                 <button type="button" class="btn-primary" id="uploadAppLogoBtn" onclick="document.getElementById('appLogoInput').click()">
                   <i class="fas fa-upload"></i> Upload App Logo
                 </button>
                 <div class="toggle-description">Updates Header, Login, Splash Screen &amp; App Icon</div>
+                <div style="display: flex; gap: 0.5rem; width: 100%; margin-top: 0.4rem;">
+                  <input type="url" id="appLogoLinkInput" placeholder="Saved App Logo Link (or paste URL)" style="flex: 1; font-size: 0.8rem;">
+                  <button type="button" class="btn-secondary" style="width: auto; padding: 0.45rem 0.75rem; font-size: 0.8rem;" onclick="saveBrandingLink('app')">Save Link</button>
+                </div>
                 <input type="file" id="appLogoInput" accept="image/*" onchange="handleAppLogoUpload()" style="display: none;">
               </div>
             </div>
@@ -463,11 +467,15 @@
               <div class="user-photo-preview" id="photoLogoAdminPreview" style="border-radius: var(--radius-sm); width: 84px; height: 64px; background: var(--white);">
                 <img id="photoLogoAdminImg" src="https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN" alt="Photo Watermark Logo" style="object-fit: contain; padding: 4px;">
               </div>
-              <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start;">
+              <div class="user-photo-actions" style="flex-direction: column; align-items: flex-start; width: 100%;">
                 <button type="button" class="btn-primary" id="uploadPhotoLogoBtn" onclick="document.getElementById('photoLogoInput').click()">
                   <i class="fas fa-stamp"></i> Upload Photo Watermark Logo
                 </button>
                 <div class="toggle-description">Updates Photo &amp; Video Watermarks only</div>
+                <div style="display: flex; gap: 0.5rem; width: 100%; margin-top: 0.4rem;">
+                  <input type="url" id="photoLogoLinkInput" placeholder="Saved Photo Watermark Link (or paste URL)" style="flex: 1; font-size: 0.8rem;">
+                  <button type="button" class="btn-secondary" style="width: auto; padding: 0.45rem 0.75rem; font-size: 0.8rem;" onclick="saveBrandingLink('photo')">Save Link</button>
+                </div>
                 <input type="file" id="photoLogoInput" accept="image/*" onchange="handlePhotoLogoUpload()" style="display: none;">
               </div>
             </div>
