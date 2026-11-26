@@ -543,6 +543,7 @@ function preloadSchoolLogo(customUrl = '') {
 
 function applyBrandingLogoUrl(logoUrl) {
   if (!logoUrl) return;
+  document.documentElement.style.setProperty('--app-logo-url', `url("${logoUrl}")`);
   const loginLogo = document.getElementById('login-school-logo');
   const headerLogo = document.getElementById('school-logo');
   const splashLogo = document.getElementById('splash-school-logo');
