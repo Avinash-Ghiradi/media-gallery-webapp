@@ -1090,7 +1090,48 @@ function copyAllFolderLinks() {
   });
 }
 
-// Client-side HTML5 Canvas Watermarking
+// High-quality smart photo compression (caps longest side at 2560px with 88% JPEG quality)
+function compressPhotoHighQuality(file, maxDim = 2560, quality = 0.88) {
+  return new Promise((resolve) => {
+    if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
+      return resolve({ blob: file, filename: file.name });
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const longest = Math.max(img.width, img.height);
+        // If already reasonably sized and small, keep original bytes untouched
+        if (longest <= maxDim && file.size <= 900 * 1024) {
+          return resolve({ blob: file, filename: file.name });
+        }
+        const scale = Math.min(1, maxDim / longest);
+        const targetW = Math.max(1, Math.round(img.width * scale));
+        const targetH = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve({ blob: file, filename: file.name });
+          // Ensure .jpg extension when re-encoded as JPEG
+          const outName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+          resolve({ blob, filename: outName });
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => resolve({ blob: file, filename: file.name });
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve({ blob: file, filename: file.name });
+    reader.readAsDataURL(file);
+  });
+}
+
+// Client-side HTML5 Canvas Watermarking (with high-quality compression)
 function addWatermarkToImage(file, eventName, className, callback) {
   if (!watermarkEnabled) {
     readFileAsDataURL(file).then(result => callback(result));
@@ -1106,16 +1147,23 @@ function addWatermarkToImage(file, eventName, className, callback) {
   reader.onload = function(e) {
     const img = new Image();
     img.onload = function() {
+      const maxDim = 2560;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const targetW = Math.max(1, Math.round(img.width * scale));
+      const targetH = Math.max(1, Math.round(img.height * scale));
+
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
+      canvas.width = targetW;
+      canvas.height = targetH;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, targetW, targetH);
 
-      const borderMargin = Math.max(12, Math.min(img.width, img.height) * 0.025);
-      const borderWidth = Math.max(4, Math.min(img.width, img.height) * 0.004);
-      const cornerRadius = Math.max(10, Math.min(img.width, img.height) * 0.012);
+      const borderMargin = Math.max(12, Math.min(targetW, targetH) * 0.025);
+      const borderWidth = Math.max(4, Math.min(targetW, targetH) * 0.004);
+      const cornerRadius = Math.max(10, Math.min(targetW, targetH) * 0.012);
 
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = borderWidth;
@@ -1133,7 +1181,7 @@ function addWatermarkToImage(file, eventName, className, callback) {
       ctx.closePath();
       ctx.stroke();
 
-      const fontSize = Math.max(22, Math.min(img.width, img.height) * 0.028);
+      const fontSize = Math.max(22, Math.min(targetW, targetH) * 0.028);
       ctx.font = `bold ${fontSize}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
@@ -1181,15 +1229,16 @@ function addWatermarkToImage(file, eventName, className, callback) {
         const reader = new FileReader();
         reader.onload = function(e) {
           const base64 = e.target.result.split(',')[1];
+          const outName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
           callback({
-            filename: file.name,
+            filename: outName,
             data: base64,
-            contentType: file.type,
+            contentType: 'image/jpeg',
             size: blob.size
           });
         };
         reader.readAsDataURL(blob);
-      }, file.type, 0.9);
+      }, 'image/jpeg', 0.88);
     };
     img.src = e.target.result;
   };
@@ -1267,7 +1316,28 @@ function triggerDirectCamera() {
   }
 }
 
-// Immediately process and upload captured photo to Google Drive & Sheets
+let instantCameraQueue = [];
+let instantUploadingCount = 0;
+let instantCompletedCount = 0;
+let instantFailedCount = 0;
+
+function updateCameraQueueUI() {
+  const box = document.getElementById('cameraQueueStatus');
+  if (!box) return;
+  const pending = instantCameraQueue.length + instantUploadingCount;
+  if (pending === 0 && instantCompletedCount === 0 && instantFailedCount === 0) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  const parts = [];
+  if (pending > 0) parts.push(`<i class="fas fa-spinner fa-spin"></i> Uploading ${pending} photo(s)...`);
+  if (instantCompletedCount > 0) parts.push(`<span style="color: var(--success);">✅ ${instantCompletedCount} uploaded</span>`);
+  if (instantFailedCount > 0) parts.push(`<span style="color: var(--error);">⚠️ ${instantFailedCount} failed</span>`);
+  box.innerHTML = parts.join(' &nbsp;•&nbsp; ');
+}
+
+// Immediately queue captured photo for background compression & upload without blocking next shot
 function handleDirectCameraCapture() {
   const cameraInput = document.getElementById('cameraInput');
   if (!cameraInput || !cameraInput.files || cameraInput.files.length === 0) return;
@@ -1277,25 +1347,89 @@ function handleDirectCameraCapture() {
 
   const file = cameraInput.files[0];
   if (file.size > 500 * 1024 * 1024) {
-    showStatus('Captured photo exceeds 500MB limit and cannot be uploaded', 'error');
+    showNoticePopup('Captured photo exceeds 500MB limit and cannot be uploaded', '', 'File Too Large');
     cameraInput.value = '';
     return;
   }
 
-  // Ensure a clean timestamped filename for camera photos
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const uniqueSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
   const ext = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : 'jpg';
-  const renamedFile = new File([file], `photo_${timestamp}.${ext}`, {
+  const renamedFile = new File([file], `photo_${timestamp}_${uniqueSuffix}.${ext}`, {
     type: file.type || 'image/jpeg',
     lastModified: file.lastModified
   });
 
-  selectedFiles = [renamedFile];
-  updateFilePreview();
-  updateFileCount();
+  instantCameraQueue.push({
+    file: renamedFile,
+    eventName: selection.eventName,
+    className: selection.className
+  });
+  updateCameraQueueUI();
+  processInstantCameraQueue();
 
-  processAndUploadFiles([renamedFile], selection.eventName, selection.className, true);
   cameraInput.value = '';
+  const continuousToggle = document.getElementById('continuousCameraToggle');
+  if (continuousToggle && continuousToggle.checked) {
+    showCopyNotification('Uploading in background! Ready for next photo.');
+    // Attempt to re-open camera automatically for continuous shooting where browser permits
+    setTimeout(() => {
+      try {
+        cameraInput.click();
+      } catch (e) {}
+    }, 350);
+  }
+}
+
+async function processInstantCameraQueue() {
+  if (instantUploadingCount > 0 || instantCameraQueue.length === 0) return;
+
+  const item = instantCameraQueue.shift();
+  instantUploadingCount++;
+  updateCameraQueueUI();
+
+  try {
+    const compressedOriginal = await compressPhotoHighQuality(item.file);
+    const formData = new FormData();
+    formData.append('eventName', item.eventName);
+    formData.append('className', item.className);
+    formData.append('addWatermark', watermarkEnabled ? 'true' : 'false');
+
+    if (watermarkEnabled) {
+      const watermarked = await new Promise((resolve) => {
+        addWatermarkToImage(item.file, item.eventName, item.className, resolve);
+      });
+      const wmBlob = base64ToBlob(watermarked.data, watermarked.contentType);
+      formData.append('files', wmBlob, watermarked.filename);
+      formData.append('originalFiles', compressedOriginal.blob, compressedOriginal.filename);
+    } else {
+      formData.append('files', compressedOriginal.blob, compressedOriginal.filename);
+    }
+
+    const res = await fetch('/api/upload-multipart', {
+      method: 'POST',
+      body: formData
+    });
+    const result = await res.json();
+
+    if (res.ok && result && result.status === 'success') {
+      instantCompletedCount++;
+      loadEvents({ silent: true, preserveEvent: item.eventName, preserveClass: item.className });
+      loadRecentFolders();
+    } else {
+      instantFailedCount++;
+      showStatus(`Instant upload failed: ${(result && result.message) || res.status}`, 'error');
+    }
+  } catch (err) {
+    instantFailedCount++;
+    showStatus('Instant upload error: ' + err.message, 'error');
+  } finally {
+    instantUploadingCount--;
+    updateCameraQueueUI();
+    if (instantCameraQueue.length > 0) {
+      processInstantCameraQueue();
+    }
+  }
 }
 
 // Upload Files Action
@@ -1353,17 +1487,24 @@ function processAndUploadFiles(filesToUpload, eventName, className, isInstantCam
 
   filesToUpload.forEach((file, index) => {
     if (file.type.startsWith('image/') && watermarkEnabled) {
-      // Keep original unwatermarked image for "Without Watermark" folder
-      originalBlobs[index] = {
-        blob: file,
-        filename: file.name
-      };
+      compressPhotoHighQuality(file).then((compressedOrig) => {
+        originalBlobs[index] = compressedOrig;
+        addWatermarkToImage(file, eventName, className, function(watermarkedFile) {
+          preparedBlobs[index] = {
+            blob: base64ToBlob(watermarkedFile.data, watermarkedFile.contentType),
+            filename: watermarkedFile.filename
+          };
+          processedCount++;
+          updateProgress((processedCount / filesToUpload.length) * 30);
 
-      addWatermarkToImage(file, eventName, className, function(watermarkedFile) {
-        preparedBlobs[index] = {
-          blob: base64ToBlob(watermarkedFile.data, watermarkedFile.contentType),
-          filename: watermarkedFile.filename
-        };
+          if (processedCount === filesToUpload.length) {
+            uploadToDrive(preparedBlobs, eventName, className, originalBlobs);
+          }
+        });
+      });
+    } else if (file.type.startsWith('image/')) {
+      compressPhotoHighQuality(file).then((compressedOrig) => {
+        preparedBlobs[index] = compressedOrig;
         processedCount++;
         updateProgress((processedCount / filesToUpload.length) * 30);
 
