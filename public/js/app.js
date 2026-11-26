@@ -1903,6 +1903,55 @@ function handleUserPhotoSelect() {
   reader.readAsDataURL(file);
 }
 
+function handleAdminClassSelectChange() {
+  const select = document.getElementById('newUserClass');
+  const customInput = document.getElementById('newUserClassCustom');
+  if (select && customInput) {
+    customInput.style.display = select.value === '__custom__' ? 'block' : 'none';
+    if (select.value !== '__custom__') customInput.value = '';
+  }
+}
+
+function handleAdminRoleSelectChange() {
+  const select = document.getElementById('newUserDetails');
+  const customInput = document.getElementById('newUserDetailsCustom');
+  if (select && customInput) {
+    customInput.style.display = select.value === '__custom__' ? 'block' : 'none';
+    if (select.value !== '__custom__') customInput.value = '';
+  }
+}
+
+function setSelectOrCustomValue(selectId, customInputId, value) {
+  const select = document.getElementById(selectId);
+  const customInput = document.getElementById(customInputId);
+  if (!select) return;
+
+  const cleanVal = (value || '').trim();
+  if (!cleanVal) {
+    select.value = '';
+    if (customInput) {
+      customInput.style.display = 'none';
+      customInput.value = '';
+    }
+    return;
+  }
+
+  const hasOption = Array.from(select.options).some(opt => opt.value === cleanVal && opt.value !== '__custom__');
+  if (hasOption) {
+    select.value = cleanVal;
+    if (customInput) {
+      customInput.style.display = 'none';
+      customInput.value = '';
+    }
+  } else {
+    select.value = '__custom__';
+    if (customInput) {
+      customInput.style.display = 'block';
+      customInput.value = cleanVal;
+    }
+  }
+}
+
 function editUserFromAdmin(index) {
   const user = adminUsersCache[index];
   if (!user) return;
@@ -1917,8 +1966,8 @@ function editUserFromAdmin(index) {
 
   document.getElementById('newUserUsername').value = user.username;
   document.getElementById('newUserPassword').value = user.password;
-  document.getElementById('newUserClass').value = user.assignedClass || '';
-  document.getElementById('newUserDetails').value = user.details || '';
+  setSelectOrCustomValue('newUserClass', 'newUserClassCustom', user.assignedClass || '');
+  setSelectOrCustomValue('newUserDetails', 'newUserDetailsCustom', user.details || '');
   updateUserPhotoPreview(pendingUserPhotoData);
 
   const card = document.getElementById('userEditorCard');
@@ -1935,8 +1984,8 @@ function resetUserForm() {
 
   document.getElementById('newUserUsername').value = '';
   document.getElementById('newUserPassword').value = '';
-  document.getElementById('newUserClass').value = '';
-  document.getElementById('newUserDetails').value = '';
+  setSelectOrCustomValue('newUserClass', 'newUserClassCustom', '');
+  setSelectOrCustomValue('newUserDetails', 'newUserDetailsCustom', '');
   clearUserPhoto();
 }
 
@@ -2003,13 +2052,19 @@ async function saveUserFromAdmin() {
   const usernameEl = document.getElementById('newUserUsername');
   const passwordEl = document.getElementById('newUserPassword');
   const classEl = document.getElementById('newUserClass');
+  const classCustomEl = document.getElementById('newUserClassCustom');
   const detailsEl = document.getElementById('newUserDetails');
+  const detailsCustomEl = document.getElementById('newUserDetailsCustom');
   const saveBtn = document.getElementById('saveUserBtn');
 
   const username = usernameEl ? usernameEl.value.trim() : '';
   const password = passwordEl ? passwordEl.value.trim() : '';
-  const assignedClass = classEl ? classEl.value.trim() : '';
-  const details = detailsEl ? detailsEl.value.trim() : '';
+  const assignedClass = classEl
+    ? (classEl.value === '__custom__' ? (classCustomEl ? classCustomEl.value.trim() : '') : classEl.value.trim())
+    : '';
+  const details = detailsEl
+    ? (detailsEl.value === '__custom__' ? (detailsCustomEl ? detailsCustomEl.value.trim() : '') : detailsEl.value.trim())
+    : '';
 
   if (!username) {
     showNoticePopup('Please enter a username', 'newUserUsername');
