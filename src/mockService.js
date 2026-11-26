@@ -211,6 +211,13 @@ function getFolderLinksForEvent(eventName) {
   return { status: 'success', data: folderLinks };
 }
 
+function getWithoutWatermarkFolderLinks(eventName) {
+  if (!eventName || eventName === 'all') {
+    return getFolderLinksFromSheet2();
+  }
+  return getFolderLinksForEvent(eventName);
+}
+
 function getRecentUploads() {
   return {
     status: 'success',
@@ -367,6 +374,7 @@ module.exports = {
   getEventsFromSheet2,
   getFolderLinksFromSheet2,
   getFolderLinksForEvent,
+  getWithoutWatermarkFolderLinks,
   getRecentUploads,
   getAllEventsForDeletion,
   deleteEventFolder,
