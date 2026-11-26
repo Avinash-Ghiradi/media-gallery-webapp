@@ -488,6 +488,9 @@ input:checked + .slider:before {
 
 /* Direct Camera Hero Box */
 .camera-instant-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
   border: 2px solid #c7d2fe;
   border-radius: var(--radius);
@@ -543,9 +546,10 @@ input:checked + .slider:before {
 }
 
 .continuous-capture-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.75rem;
   font-size: 0.8125rem;
