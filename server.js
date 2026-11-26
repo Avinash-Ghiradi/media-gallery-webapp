@@ -59,8 +59,8 @@ app.get('/manifest.json', (req, res) => {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    background_color: '#f8fafc',
-    theme_color: '#4f46e5',
+    background_color: '#ffffff',
+    theme_color: '#ffffff',
     orientation: 'any',
     icons: [
       {
@@ -494,20 +494,15 @@ async function regeneratePwaIconsFromBuffer(buf) {
     for (const size of [192, 512]) {
       const canvas = createCanvas(size, size);
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#4f46e5';
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, size, size);
-      const pad = Math.round(size * 0.12);
+      const pad = Math.round(size * 0.1);
       const maxBox = size - pad * 2;
       const scale = Math.min(maxBox / img.width, maxBox / img.height);
       const drawW = Math.max(1, Math.round(img.width * scale));
       const drawH = Math.max(1, Math.round(img.height * scale));
       const x = Math.round((size - drawW) / 2);
       const y = Math.round((size - drawH) / 2);
-      ctx.fillStyle = '#ffffff';
-      const r = Math.round(size * 0.1);
-      ctx.beginPath();
-      ctx.roundRect(pad - 6, pad - 6, maxBox + 12, maxBox + 12, r);
-      ctx.fill();
       ctx.drawImage(img, x, y, drawW, drawH);
       fs.writeFileSync(path.join(iconsDir, `icon-${size}.png`), canvas.toBuffer('image/png'));
     }
@@ -542,6 +537,13 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Failed to save logo: ' + err.message });
   }
 });
+
+// Regenerate white-background PWA icons on startup if a custom logo exists
+if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
+  regeneratePwaIconsFromBuffer(fs.readFileSync(CUSTOM_PUBLIC_LOGO));
+} else if (fs.existsSync(SERVER_WATERMARK_LOGO)) {
+  regeneratePwaIconsFromBuffer(fs.readFileSync(SERVER_WATERMARK_LOGO));
+}
 
 // Fallback index.html for SPA routing
 app.get('*', (req, res) => {
