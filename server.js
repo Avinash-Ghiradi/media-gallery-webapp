@@ -8,6 +8,7 @@ const multer = require('multer');
 const config = require('./src/config');
 const auth = require('./src/auth');
 const googleService = require('./src/googleService');
+const videoWatermark = require('./src/videoWatermark');
 
 const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
 const upload = multer({
@@ -319,6 +320,53 @@ app.post('/api/users/apply-default-password', auth.requireAdmin, async (req, res
     res.json(result);
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+/* ==========================================================================
+   APP BRANDING & LOGO ROUTES
+   ========================================================================== */
+
+const DEFAULT_LOGO_URL = 'https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN';
+const CUSTOM_PUBLIC_LOGO = path.join(__dirname, 'public', 'custom-logo.png');
+const SERVER_WATERMARK_LOGO = path.join(__dirname, 'src', 'school_logo.png');
+
+app.get('/api/branding', (req, res) => {
+  let logoUrl = DEFAULT_LOGO_URL;
+  if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
+    const stat = fs.statSync(CUSTOM_PUBLIC_LOGO);
+    logoUrl = `/custom-logo.png?v=${Math.floor(stat.mtimeMs)}`;
+  }
+  res.json({
+    status: 'success',
+    appName: 'Success Gallery',
+    logoUrl
+  });
+});
+
+app.post('/api/branding/logo', auth.requireAdmin, (req, res) => {
+  try {
+    const { logoDataUrl } = req.body;
+    if (!logoDataUrl || typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
+      return res.status(400).json({ status: 'error', message: 'Valid image file is required' });
+    }
+    const base64 = logoDataUrl.split(',')[1];
+    if (!base64) {
+      return res.status(400).json({ status: 'error', message: 'Invalid image data' });
+    }
+    const buf = Buffer.from(base64, 'base64');
+    fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
+    fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
+    videoWatermark.reloadLogo();
+
+    const logoUrl = `/custom-logo.png?v=${Date.now()}`;
+    res.json({
+      status: 'success',
+      message: 'App logo updated! Applied to header, login & watermarks.',
+      logoUrl
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: 'Failed to save logo: ' + err.message });
   }
 });
 
