@@ -38,10 +38,10 @@
         </div>
 
         <div class="form-group">
-          <label for="loginUsername">Username</label>
+          <label for="loginUsername">Mobile Number / Username</label>
           <div class="input-wrapper">
-            <i class="fas fa-user input-icon-left"></i>
-            <input type="text" id="loginUsername" class="has-left-icon" placeholder="Enter username (optional for admin)" onkeypress="handleEnterKey(event)" autocomplete="username">
+            <i class="fas fa-phone input-icon-left"></i>
+            <input type="text" id="loginUsername" class="has-left-icon" placeholder="Enter mobile number (or admin username)" onkeypress="handleEnterKey(event)" autocomplete="username">
           </div>
         </div>
 
@@ -441,18 +441,24 @@
             <div class="form-row">
               <div class="form-col">
                 <div class="form-group">
-                  <label for="newUserUsername">Username *</label>
-                  <input type="text" id="newUserUsername" placeholder="e.g., Teacher 1">
+                  <label for="newUserUsername">Mobile Number (Login Username) *</label>
+                  <input type="tel" id="newUserUsername" placeholder="e.g., 9876543210">
                 </div>
               </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="newUserFullName">Full Name</label>
+                  <input type="text" id="newUserFullName" placeholder="e.g., Priya Mam">
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
               <div class="form-col">
                 <div class="form-group">
                   <label for="newUserPassword">Password *</label>
                   <input type="text" id="newUserPassword" placeholder="e.g., class1@123">
                 </div>
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-col">
                 <div class="form-group">
                   <label for="newUserClass">Assigned Class (leave blank for Admin)</label>
@@ -481,6 +487,8 @@
                   <input type="text" id="newUserClassCustom" style="display: none; margin-top: 8px;" placeholder="Enter custom class (e.g., 3rd A Standard)">
                 </div>
               </div>
+            </div>
+            <div class="form-row">
               <div class="form-col">
                 <div class="form-group">
                   <label for="newUserDetails">Role / Details (optional)</label>
