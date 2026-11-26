@@ -492,11 +492,14 @@ const CUSTOM_PHOTO_LOGO = path.join(__dirname, 'public', 'custom-photo-logo.png'
 const SERVER_WATERMARK_LOGO = path.join(__dirname, 'src', 'school_logo.png');
 let logoRestorePromise = null;
 
+let persistedBrandingUrls = { appLogoUrl: '', photoLogoUrl: '' };
+
 async function ensurePersistentAppLogoLoaded() {
   if (fs.existsSync(CUSTOM_PUBLIC_LOGO) && fs.existsSync(CUSTOM_PHOTO_LOGO)) return true;
   if (!logoRestorePromise) {
     logoRestorePromise = (async () => {
       try {
+        persistedBrandingUrls = await googleService.getPersistedBrandingUrls();
         const [appBuf, photoBuf] = await Promise.all([
           fs.existsSync(CUSTOM_PUBLIC_LOGO) ? Promise.resolve(null) : googleService.loadAppLogoFromDrive('app'),
           fs.existsSync(CUSTOM_PHOTO_LOGO) ? Promise.resolve(null) : googleService.loadAppLogoFromDrive('photo')
@@ -522,12 +525,15 @@ async function ensurePersistentAppLogoLoaded() {
 
 app.get('/api/branding', async (req, res) => {
   await ensurePersistentAppLogoLoaded();
-  let logoUrl = DEFAULT_LOGO_URL;
+  if (!persistedBrandingUrls.appLogoUrl && !persistedBrandingUrls.photoLogoUrl) {
+    persistedBrandingUrls = await googleService.getPersistedBrandingUrls();
+  }
+  let logoUrl = persistedBrandingUrls.appLogoUrl || DEFAULT_LOGO_URL;
   if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
     const stat = fs.statSync(CUSTOM_PUBLIC_LOGO);
     logoUrl = `/custom-logo.png?v=${Math.floor(stat.mtimeMs)}`;
   }
-  let photoLogoUrl = logoUrl;
+  let photoLogoUrl = persistedBrandingUrls.photoLogoUrl || logoUrl;
   if (fs.existsSync(CUSTOM_PHOTO_LOGO)) {
     const pStat = fs.statSync(CUSTOM_PHOTO_LOGO);
     photoLogoUrl = `/custom-photo-logo.png?v=${Math.floor(pStat.mtimeMs)}`;
@@ -536,7 +542,9 @@ app.get('/api/branding', async (req, res) => {
     status: 'success',
     appName: 'Success Gallery',
     logoUrl,
-    photoLogoUrl
+    photoLogoUrl,
+    savedAppLogoLink: persistedBrandingUrls.appLogoUrl || '',
+    savedPhotoLogoLink: persistedBrandingUrls.photoLogoUrl || ''
   });
 });
 
@@ -568,9 +576,28 @@ async function regeneratePwaIconsFromBuffer(buf) {
 
 app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
   try {
-    const { logoDataUrl } = req.body;
+    const { logoDataUrl, logoLink } = req.body;
+    if (logoLink && typeof logoLink === 'string' && logoLink.trim().startsWith('http')) {
+      const cleanLink = logoLink.trim();
+      const resp = await fetch(cleanLink);
+      if (!resp.ok) {
+        return res.status(400).json({ status: 'error', message: 'Could not download image from that link.' });
+      }
+      const buf = Buffer.from(await resp.arrayBuffer());
+      fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
+      await regeneratePwaIconsFromBuffer(buf);
+      await googleService.saveBrandingUrlToSheet('app', cleanLink);
+      persistedBrandingUrls.appLogoUrl = cleanLink;
+      logoRestorePromise = Promise.resolve(true);
+      return res.json({
+        status: 'success',
+        message: 'App logo link saved & applied!',
+        logoUrl: `/custom-logo.png?v=${Date.now()}`,
+        savedAppLogoLink: cleanLink
+      });
+    }
     if (!logoDataUrl || typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
-      return res.status(400).json({ status: 'error', message: 'Valid image file is required' });
+      return res.status(400).json({ status: 'error', message: 'Valid image file or link is required' });
     }
     const base64 = logoDataUrl.split(',')[1];
     if (!base64) {
@@ -579,14 +606,18 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
     const buf = Buffer.from(base64, 'base64');
     fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
     await regeneratePwaIconsFromBuffer(buf);
-    await googleService.saveAppLogoToDrive(buf, 'app');
+    const savedLink = await googleService.saveAppLogoToDrive(buf, 'app');
+    if (typeof savedLink === 'string' && savedLink.startsWith('http')) {
+      persistedBrandingUrls.appLogoUrl = savedLink;
+    }
     logoRestorePromise = Promise.resolve(true);
 
     const logoUrl = `/custom-logo.png?v=${Date.now()}`;
     res.json({
       status: 'success',
-      message: 'App logo & install icon updated! Reinstall or refresh app to see the new icon.',
-      logoUrl
+      message: 'App logo & install icon updated and saved!',
+      logoUrl,
+      savedAppLogoLink: persistedBrandingUrls.appLogoUrl || ''
     });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to save logo: ' + err.message });
@@ -595,9 +626,29 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
 
 app.post('/api/branding/photo-logo', auth.requireAdmin, async (req, res) => {
   try {
-    const { logoDataUrl } = req.body;
+    const { logoDataUrl, logoLink } = req.body;
+    if (logoLink && typeof logoLink === 'string' && logoLink.trim().startsWith('http')) {
+      const cleanLink = logoLink.trim();
+      const resp = await fetch(cleanLink);
+      if (!resp.ok) {
+        return res.status(400).json({ status: 'error', message: 'Could not download image from that link.' });
+      }
+      const buf = Buffer.from(await resp.arrayBuffer());
+      fs.writeFileSync(CUSTOM_PHOTO_LOGO, buf);
+      fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
+      videoWatermark.reloadLogo();
+      await googleService.saveBrandingUrlToSheet('photo', cleanLink);
+      persistedBrandingUrls.photoLogoUrl = cleanLink;
+      logoRestorePromise = Promise.resolve(true);
+      return res.json({
+        status: 'success',
+        message: 'Photo & Video watermark logo link saved & applied!',
+        photoLogoUrl: `/custom-photo-logo.png?v=${Date.now()}`,
+        savedPhotoLogoLink: cleanLink
+      });
+    }
     if (!logoDataUrl || typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
-      return res.status(400).json({ status: 'error', message: 'Valid image file is required' });
+      return res.status(400).json({ status: 'error', message: 'Valid image file or link is required' });
     }
     const base64 = logoDataUrl.split(',')[1];
     if (!base64) {
@@ -607,14 +658,18 @@ app.post('/api/branding/photo-logo', auth.requireAdmin, async (req, res) => {
     fs.writeFileSync(CUSTOM_PHOTO_LOGO, buf);
     fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
     videoWatermark.reloadLogo();
-    await googleService.saveAppLogoToDrive(buf, 'photo');
+    const savedLink = await googleService.saveAppLogoToDrive(buf, 'photo');
+    if (typeof savedLink === 'string' && savedLink.startsWith('http')) {
+      persistedBrandingUrls.photoLogoUrl = savedLink;
+    }
     logoRestorePromise = Promise.resolve(true);
 
     const photoLogoUrl = `/custom-photo-logo.png?v=${Date.now()}`;
     res.json({
       status: 'success',
-      message: 'Photo & Video watermark logo updated!',
-      photoLogoUrl
+      message: 'Photo & Video watermark logo updated and saved!',
+      photoLogoUrl,
+      savedPhotoLogoLink: persistedBrandingUrls.photoLogoUrl || ''
     });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to save photo logo: ' + err.message });
