@@ -321,6 +321,25 @@ app.get('/api/folders/links/:eventName', auth.requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/folders/without-watermark', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await googleService.getWithoutWatermarkFolderLinks('all');
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/folders/without-watermark/:eventName', auth.requireAuth, async (req, res) => {
+  try {
+    const { eventName } = req.params;
+    const result = await googleService.getWithoutWatermarkFolderLinks(eventName);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 app.get('/api/recent', auth.requireAuth, async (req, res) => {
   try {
     const result = await googleService.getRecentUploads();
