@@ -93,9 +93,15 @@
           </div>
           <div class="user-meta">
             <div id="user-name">Admin Portal</div>
-            <a href="#" onclick="logout(); return false;" class="logout-link">
-              <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
+            <div class="user-meta-links">
+              <a href="#" onclick="openMyProfileModal(); return false;" class="logout-link">
+                <i class="fas fa-user-edit"></i> Profile
+              </a>
+              <span style="opacity: 0.5;">•</span>
+              <a href="#" onclick="logout(); return false;" class="logout-link">
+                <i class="fas fa-sign-out-alt"></i> Logout
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -595,6 +601,71 @@
         <p id="noticeModalMessage"></p>
         <div class="modal-actions">
           <button type="button" class="btn-primary notice-ok-btn" onclick="closeNoticeModal()">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Profile Modal (Available to all logged-in users) -->
+  <div id="myProfileModal" class="confirmation-modal" style="display: none;" onclick="if (event.target === this) closeMyProfileModal();">
+    <div class="modal-content" style="max-height: 92vh; overflow-y: auto;">
+      <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);">
+        <i class="fas fa-user-circle"></i>
+        <h3>My Profile</h3>
+      </div>
+      <div class="modal-body">
+        <div class="user-photo-picker">
+          <div class="user-photo-preview" id="myProfilePhotoPreview">
+            <i class="fas fa-user"></i>
+          </div>
+          <div class="user-photo-actions">
+            <button type="button" class="btn-secondary" onclick="document.getElementById('myProfilePhotoInput').click()">
+              <i class="fas fa-camera"></i> Change Photo
+            </button>
+            <button type="button" class="delete-class-btn" id="removeMyProfilePhotoBtn" onclick="clearMyProfilePhoto()" style="display: none;">
+              <i class="fas fa-times"></i> Remove
+            </button>
+            <input type="file" id="myProfilePhotoInput" accept="image/*" onchange="handleMyProfilePhotoSelect()" style="display: none;">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-col">
+            <div class="form-group">
+              <label for="myProfileUsername">Mobile / Username</label>
+              <input type="text" id="myProfileUsername" disabled>
+            </div>
+          </div>
+          <div class="form-col">
+            <div class="form-group">
+              <label for="myProfileClass">Assigned Class</label>
+              <input type="text" id="myProfileClass" disabled>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="myProfileFullName">Full Name</label>
+          <input type="text" id="myProfileFullName" placeholder="Enter your full name">
+        </div>
+
+        <div class="form-group">
+          <label for="myProfileDetails">Role / Details</label>
+          <input type="text" id="myProfileDetails" placeholder="e.g., Class Teacher">
+        </div>
+
+        <div class="form-group">
+          <label for="myProfileNewPassword">New Password (leave blank to keep current)</label>
+          <input type="password" id="myProfileNewPassword" placeholder="Min 6 characters (optional)" autocomplete="new-password">
+        </div>
+
+        <div id="myProfileError" class="status-message login-status-error" style="display: none; margin-bottom: 1rem;"></div>
+
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel-btn" onclick="closeMyProfileModal()">Cancel</button>
+          <button type="button" class="btn-primary" id="saveMyProfileBtn" onclick="saveMyProfile()">
+            <i class="fas fa-save"></i> Save Profile
+          </button>
         </div>
       </div>
     </div>
