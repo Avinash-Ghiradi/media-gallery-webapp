@@ -370,10 +370,17 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
 async function getAllFolders() {
   if (config.gasWebAppUrl) {
     try {
+      const liveRes = await callGasBridge('getAllEventsForDeletion');
+      if (liveRes && Array.isArray(liveRes.data)) {
+        return liveRes.data
+          .map((ev) => ev && ev.name)
+          .filter((name) => name && name !== '_UserProfiles')
+          .sort();
+      }
       const res = await callGasBridge('getAllFolders');
-      if (Array.isArray(res)) return res;
-      if (res && Array.isArray(res.data)) return res.data;
-      if (res && Array.isArray(res.folders)) return res.folders;
+      if (Array.isArray(res)) return res.filter((n) => n !== '_UserProfiles');
+      if (res && Array.isArray(res.data)) return res.data.filter((n) => n !== '_UserProfiles');
+      if (res && Array.isArray(res.folders)) return res.folders.filter((n) => n !== '_UserProfiles');
     } catch (e) {
       console.error('GAS getAllFolders error:', e.message);
     }
