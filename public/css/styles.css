@@ -160,9 +160,9 @@ body {
 }
 
 .user-avatar {
-  width: 2.125rem;
-  height: 2.125rem;
-  border-radius: 50%;
+  width: 2.15rem;
+  height: 2.65rem;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.22);
   display: flex;
   align-items: center;
@@ -1952,8 +1952,8 @@ select:disabled {
 .user-photo-preview,
 .user-list-avatar {
   width: 64px;
-  height: 64px;
-  border-radius: 50%;
+  height: 80px;
+  border-radius: 10px;
   background: var(--primary-light);
   color: var(--primary);
   display: flex;
@@ -1966,8 +1966,9 @@ select:disabled {
 }
 
 .user-list-avatar {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 54px;
+  border-radius: 8px;
   font-size: 1.15rem;
 }
 
