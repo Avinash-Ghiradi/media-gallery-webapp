@@ -1014,6 +1014,77 @@ function sanitizeFilename(name) {
   return name.replace(/[\/\\?%*:|"<>]/g, '-').trim();
 }
 
+async function getWithoutWatermarkFolderLinks(eventName = 'all') {
+  if (config.gasWebAppUrl) {
+    try {
+      const res = await callGasBridge('getWithoutWatermarkFolderLinks', { eventName: eventName || 'all' });
+      if (res && res.status === 'success') return res;
+    } catch (e) {
+      console.error('GAS getWithoutWatermarkFolderLinks error:', e.message);
+    }
+  }
+
+  const drive = getDriveClient();
+  if (!drive) return mockService.getWithoutWatermarkFolderLinks(eventName);
+
+  try {
+    const isAll = !eventName || eventName === 'all';
+    const findSubfolders = async (parentId, extraQ = '') => {
+      const res = await drive.files.list({
+        q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false ${extraQ}`,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        fields: 'files(id, name, webViewLink)'
+      });
+      return res.data.files || [];
+    };
+
+    if (!isAll) {
+      const safeEvent = sanitizeFolderName(eventName);
+      const evFolders = await findSubfolders(config.driveRootFolderId, `and name = '${safeEvent}'`);
+      if (!evFolders.length) return { status: 'success', data: [] };
+      const classFolders = await findSubfolders(evFolders[0].id);
+      const links = [];
+      for (const cls of classFolders) {
+        const wmOff = await findSubfolders(cls.id, `and name = 'Without Watermark'`);
+        if (wmOff.length) {
+          links.push({
+            className: cls.name,
+            folderUrl: wmOff[0].webViewLink || `https://drive.google.com/drive/folders/${wmOff[0].id}`
+          });
+        }
+      }
+      links.sort((a, b) => a.className.localeCompare(b.className));
+      return { status: 'success', data: links };
+    }
+
+    const evFolders = await findSubfolders(config.driveRootFolderId);
+    const results = [];
+    for (const ev of evFolders) {
+      if (ev.name === '_UserProfiles') continue;
+      const classFolders = await findSubfolders(ev.id);
+      const evClasses = [];
+      for (const cls of classFolders) {
+        const wmOff = await findSubfolders(cls.id, `and name = 'Without Watermark'`);
+        if (wmOff.length) {
+          evClasses.push({
+            className: cls.name,
+            folderUrl: wmOff[0].webViewLink || `https://drive.google.com/drive/folders/${wmOff[0].id}`
+          });
+        }
+      }
+      if (evClasses.length) {
+        evClasses.sort((a, b) => a.className.localeCompare(b.className));
+        results.push({ eventName: ev.name, classes: evClasses });
+      }
+    }
+    results.sort((a, b) => a.eventName.localeCompare(b.eventName));
+    return { status: 'success', data: results };
+  } catch (e) {
+    return { status: 'error', message: 'Error loading Without Watermark folders: ' + e.message };
+  }
+}
+
 async function ensureUsersSheetExists(sheets) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId: config.usersSheetId });
   const exists = (meta.data.sheets || []).some(
@@ -1283,6 +1354,7 @@ module.exports = {
   getEventsFromSheet2,
   getFolderLinksFromSheet2,
   getFolderLinksForEvent,
+  getWithoutWatermarkFolderLinks,
   getRecentUploads,
   getAllEventsForDeletion,
   deleteEventFolder,
