@@ -256,6 +256,42 @@ app.delete('/api/manage/class/:eventName/:className', auth.requireAuth, async (r
   }
 });
 
+/* ==========================================================================
+   ADMIN USER MANAGEMENT ROUTES (Admin Only)
+   ========================================================================== */
+
+app.get('/api/users', auth.requireAdmin, async (req, res) => {
+  try {
+    const result = await googleService.getUsersListForAdmin();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/users', auth.requireAdmin, async (req, res) => {
+  try {
+    const { username, password, assignedClass, details } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ status: 'error', message: 'Username and password are required' });
+    }
+    const result = await googleService.addOrUpdateUser(username, password, assignedClass, details);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.delete('/api/users/:username', auth.requireAdmin, async (req, res) => {
+  try {
+    const { username } = req.params;
+    const result = await googleService.deleteUser(username);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 // Fallback index.html for SPA routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
