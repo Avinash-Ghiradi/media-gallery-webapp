@@ -141,7 +141,14 @@ async function checkAuthentication() {
   try {
     const authStatus = await apiCall('/api/auth/status');
     if (authStatus && authStatus.isAuthenticated) {
-      showMainApp(authStatus.username, authStatus.googleConfigured, authStatus.assignedClass || '', authStatus.photoUrl || '', authStatus.fullName || '');
+      showMainApp(
+        authStatus.username,
+        authStatus.googleConfigured,
+        authStatus.assignedClass || '',
+        authStatus.photoUrl || '',
+        authStatus.fullName || '',
+        !!authStatus.mustChangePassword
+      );
     } else {
       showLogin();
     }
@@ -194,7 +201,7 @@ function applyAssignedClassLock() {
   }
 }
 
-function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '', fullName = '') {
+function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = '', fullName = '', mustChangePassword = false) {
   currentUserAssignedClass = assignedClass || '';
   const displayName = fullName || username || 'Admin';
   const classNote = currentUserAssignedClass ? ` (${currentUserAssignedClass})` : '';
@@ -216,8 +223,69 @@ function showMainApp(username, googleConfigured, assignedClass = '', photoUrl = 
   initializeFolderView();
   loadRecentFolders();
 
+  if (mustChangePassword) {
+    showForceChangePasswordModal();
+  }
+
   if (googleConfigured === false) {
     showStatus('⚠️ Running in Local Test Mode. To upload real files & folders to Google Drive, place your <code>credentials.json</code> file in the project folder.', 'warning');
+  }
+}
+
+function showForceChangePasswordModal() {
+  const modal = document.getElementById('forceChangePasswordModal');
+  const errEl = document.getElementById('forceChangePasswordError');
+  const newEl = document.getElementById('forceNewPassword');
+  const confirmEl = document.getElementById('forceConfirmPassword');
+  if (errEl) errEl.style.display = 'none';
+  if (newEl) newEl.value = '';
+  if (confirmEl) confirmEl.value = '';
+  if (modal) modal.style.display = 'flex';
+  if (newEl) setTimeout(() => newEl.focus(), 100);
+}
+
+async function submitForcedPasswordChange() {
+  const newEl = document.getElementById('forceNewPassword');
+  const confirmEl = document.getElementById('forceConfirmPassword');
+  const errEl = document.getElementById('forceChangePasswordError');
+  const btn = document.getElementById('forceChangePasswordBtn');
+
+  const newPassword = newEl ? newEl.value.trim() : '';
+  const confirmPassword = confirmEl ? confirmEl.value.trim() : '';
+
+  const showErr = (msg) => {
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+  };
+
+  if (newPassword.length < 6) {
+    return showErr('New password must be at least 6 characters.');
+  }
+  if (newPassword === 'Success@123') {
+    return showErr('Please choose a password different from Success@123.');
+  }
+  if (newPassword !== confirmPassword) {
+    return showErr('Passwords do not match. Please re-enter.');
+  }
+
+  if (errEl) errEl.style.display = 'none';
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await apiCall('/api/auth/change-password', 'POST', { newPassword });
+    if (res && res.status === 'success') {
+      const modal = document.getElementById('forceChangePasswordModal');
+      if (modal) modal.style.display = 'none';
+      showCopyNotification('Password updated successfully!');
+    } else {
+      showErr((res && res.message) || 'Failed to update password.');
+    }
+  } catch (err) {
+    showErr('Error: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1988,7 +2056,7 @@ function resetUserForm() {
   document.getElementById('newUserUsername').value = '';
   const fullNameEl = document.getElementById('newUserFullName');
   if (fullNameEl) fullNameEl.value = '';
-  document.getElementById('newUserPassword').value = '';
+  document.getElementById('newUserPassword').value = 'Success@123';
   setSelectOrCustomValue('newUserClass', 'newUserClassCustom', '');
   setSelectOrCustomValue('newUserDetails', 'newUserDetailsCustom', '');
   clearUserPhoto();
@@ -2066,7 +2134,7 @@ async function saveUserFromAdmin() {
 
   const username = usernameEl ? usernameEl.value.trim() : '';
   const fullName = fullNameEl ? fullNameEl.value.trim() : '';
-  const password = passwordEl ? passwordEl.value.trim() : '';
+  const password = (passwordEl ? passwordEl.value.trim() : '') || (fullName ? 'Success@123' : '');
   const assignedClass = classEl
     ? (classEl.value === '__custom__' ? (classCustomEl ? classCustomEl.value.trim() : '') : classEl.value.trim())
     : '';
@@ -2120,5 +2188,22 @@ async function deleteUserFromAdmin(username) {
     }
   } catch (err) {
     showNoticePopup('Error removing user: ' + err.message, '', 'Error');
+  }
+}
+
+async function applyDefaultPasswordToAllNamedUsers() {
+  if (!confirm('Set default password "Success@123" for all users who have a Full Name in the sheet? They will be required to change it on their next login.')) {
+    return;
+  }
+  try {
+    const res = await apiCall('/api/users/apply-default-password', 'POST');
+    if (res && res.status === 'success') {
+      showCopyNotification(res.message || 'Default password applied!');
+      loadUsersForAdmin();
+    } else {
+      showNoticePopup((res && res.message) || 'Failed to apply default password', '', 'Error');
+    }
+  } catch (err) {
+    showNoticePopup('Error: ' + err.message, '', 'Error');
   }
 }
