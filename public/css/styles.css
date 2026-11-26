@@ -542,6 +542,39 @@ input:checked + .slider:before {
   font-weight: 500;
 }
 
+.continuous-capture-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  cursor: pointer;
+}
+
+.continuous-capture-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--primary);
+  appearance: auto;
+  cursor: pointer;
+}
+
+.camera-queue-status {
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--white);
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
 /* File Upload Area */
 .file-upload-area {
   border: 2px dashed #cbd5e1;
