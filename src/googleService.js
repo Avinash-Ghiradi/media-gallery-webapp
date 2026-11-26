@@ -279,34 +279,41 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     const eventFolder = await getOrCreateFolder(drive, rootFolderId, eventName);
     const classSubfolder = await getOrCreateFolder(drive, eventFolder.id, className);
 
-    const withWatermarkFolder = addWatermark
-      ? await getOrCreateFolder(drive, classSubfolder.id, 'With Watermark')
-      : null;
-    const withoutWatermarkFolder = await getOrCreateFolder(drive, classSubfolder.id, 'Without Watermark');
+    const [withWatermarkFolder, withoutWatermarkFolder] = await Promise.all([
+      addWatermark
+        ? getOrCreateFolder(drive, classSubfolder.id, 'With Watermark')
+        : Promise.resolve(null),
+      getOrCreateFolder(drive, classSubfolder.id, 'Without Watermark')
+    ]);
 
-    const fileUrls = [];
-
-    // Upload watermarked files (or unwatermarked when toggle is OFF)
     const primaryTargetFolderId = withWatermarkFolder ? withWatermarkFolder.id : withoutWatermarkFolder.id;
-    for (let i = 0; i < filesData.length; i++) {
-      try {
-        const uploaded = await uploadSingleFileToDriveFolder(drive, primaryTargetFolderId, filesData[i]);
-        fileUrls.push(uploaded);
-      } catch (fErr) {
-        console.error(`Failed to upload file ${filesData[i].filename}:`, fErr.message);
-      }
-    }
 
-    // Upload original unwatermarked copies to "Without Watermark" folder
-    if (addWatermark && originalsList.length > 0) {
-      for (let i = 0; i < originalsList.length; i++) {
+    // Upload watermarked & unwatermarked copies to Drive in parallel
+    const primaryUploadsPromise = Promise.all(
+      filesData.map(async (f) => {
         try {
-          await uploadSingleFileToDriveFolder(drive, withoutWatermarkFolder.id, originalsList[i]);
-        } catch (origErr) {
-          console.error(`Failed to upload original file ${originalsList[i].filename}:`, origErr.message);
+          return await uploadSingleFileToDriveFolder(drive, primaryTargetFolderId, f);
+        } catch (fErr) {
+          console.error(`Failed to upload file ${f.filename}:`, fErr.message);
+          return null;
         }
-      }
-    }
+      })
+    );
+
+    const originalUploadsPromise = (addWatermark && originalsList.length > 0)
+      ? Promise.all(
+          originalsList.map(async (orig) => {
+            try {
+              await uploadSingleFileToDriveFolder(drive, withoutWatermarkFolder.id, orig);
+            } catch (origErr) {
+              console.error(`Failed to upload original file ${orig.filename}:`, origErr.message);
+            }
+          })
+        )
+      : Promise.resolve([]);
+
+    const [uploadedResults] = await Promise.all([primaryUploadsPromise, originalUploadsPromise]);
+    const fileUrls = uploadedResults.filter(Boolean);
 
     const withWatermarkFolderUrl = withWatermarkFolder
       ? (withWatermarkFolder.webViewLink || `https://drive.google.com/drive/folders/${withWatermarkFolder.id}`)
@@ -314,8 +321,10 @@ async function uploadFilesToDrive(filesData, eventName, className, addWatermark 
     const withoutWatermarkFolderUrl = withoutWatermarkFolder.webViewLink || `https://drive.google.com/drive/folders/${withoutWatermarkFolder.id}`;
     const folderUrl = withWatermarkFolderUrl || withoutWatermarkFolderUrl;
 
-    await updateSheet2(sheets, eventName, className, folderUrl, fileUrls);
-    await updateAdditionalSheet(sheets, eventName, fileUrls);
+    await Promise.all([
+      updateSheet2(sheets, eventName, className, folderUrl, fileUrls),
+      updateAdditionalSheet(sheets, eventName, fileUrls)
+    ]);
 
     return {
       status: 'success',
