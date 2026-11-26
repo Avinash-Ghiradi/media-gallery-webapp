@@ -1307,10 +1307,17 @@ function processAndUploadFiles(filesToUpload, eventName, className, isInstantCam
   );
 
   const preparedBlobs = [];
+  const originalBlobs = [];
   let processedCount = 0;
 
   filesToUpload.forEach((file, index) => {
     if (file.type.startsWith('image/') && watermarkEnabled) {
+      // Keep original unwatermarked image for "Without Watermark" folder
+      originalBlobs[index] = {
+        blob: file,
+        filename: file.name
+      };
+
       addWatermarkToImage(file, eventName, className, function(watermarkedFile) {
         preparedBlobs[index] = {
           blob: base64ToBlob(watermarkedFile.data, watermarkedFile.contentType),
@@ -1320,7 +1327,7 @@ function processAndUploadFiles(filesToUpload, eventName, className, isInstantCam
         updateProgress((processedCount / filesToUpload.length) * 30);
 
         if (processedCount === filesToUpload.length) {
-          uploadToDrive(preparedBlobs, eventName, className);
+          uploadToDrive(preparedBlobs, eventName, className, originalBlobs);
         }
       });
     } else {
@@ -1332,7 +1339,7 @@ function processAndUploadFiles(filesToUpload, eventName, className, isInstantCam
       updateProgress((processedCount / filesToUpload.length) * 30);
 
       if (processedCount === filesToUpload.length) {
-        uploadToDrive(preparedBlobs, eventName, className);
+        uploadToDrive(preparedBlobs, eventName, className, originalBlobs);
       }
     }
   });
@@ -1371,8 +1378,9 @@ function uploadMultipartWithProgress(formData) {
   });
 }
 
-async function uploadToDrive(preparedBlobs, eventName, className) {
+async function uploadToDrive(preparedBlobs, eventName, className, originalBlobs = []) {
   const validItems = preparedBlobs.filter(item => item !== undefined);
+  const validOriginals = (originalBlobs || []).filter(item => item !== undefined);
   const takePhotoBtn = document.getElementById('takePhotoBtn');
 
   try {
@@ -1382,6 +1390,9 @@ async function uploadToDrive(preparedBlobs, eventName, className) {
     formData.append('addWatermark', watermarkEnabled ? 'true' : 'false');
     validItems.forEach((item) => {
       formData.append('files', item.blob, item.filename);
+    });
+    validOriginals.forEach((item) => {
+      formData.append('originalFiles', item.blob, item.filename);
     });
 
     const result = await uploadMultipartWithProgress(formData);
@@ -1394,9 +1405,17 @@ async function uploadToDrive(preparedBlobs, eventName, className) {
 
     if (result.status === 'success') {
       let message = `<strong>Upload successful!</strong><br>`;
-      message += `${result.urls.length} file${result.urls.length !== 1 ? 's' : ''} uploaded `;
-      message += result.watermarkApplied ? '<strong>WITH watermark</strong> ' : '<strong>WITHOUT watermark</strong> ';
-      message += `to <a href="${result.folderUrl}" target="_blank">${eventName} > ${className}</a><br><br>`;
+      message += `${result.urls.length} file${result.urls.length !== 1 ? 's' : ''} saved `;
+      if (result.withWatermarkFolderUrl && result.withoutWatermarkFolderUrl) {
+        message += `into separate folders for <strong>${eventName} &gt; ${className}</strong>:<br>`;
+        message += `<div style="margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px;">`;
+        message += `<a href="${result.withWatermarkFolderUrl}" target="_blank" style="font-weight: 600;"><i class="fab fa-whatsapp"></i> With Watermark (WhatsApp)</a>`;
+        message += `<a href="${result.withoutWatermarkFolderUrl}" target="_blank" style="font-weight: 600;"><i class="fas fa-folder-open"></i> Without Watermark (Original)</a>`;
+        message += `</div>`;
+      } else {
+        message += result.watermarkApplied ? '<strong>WITH watermark</strong> ' : '<strong>WITHOUT watermark</strong> ';
+        message += `to <a href="${result.folderUrl}" target="_blank">${eventName} &gt; ${className}</a><br><br>`;
+      }
 
       message += '<strong>Uploaded files:</strong><ul>';
       result.urls.forEach(function(file) {
