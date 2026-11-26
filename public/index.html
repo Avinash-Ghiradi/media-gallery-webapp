@@ -699,6 +699,19 @@
     <div class="live-camera-stage">
       <video id="liveCameraVideo" autoplay playsinline muted></video>
       <div id="liveCameraFlash" class="live-camera-flash"></div>
+
+      <!-- In-Camera Quick Review Overlay (OK / Cancel) -->
+      <div id="liveCameraReviewOverlay" class="live-camera-review" style="display: none;">
+        <img id="liveCameraReviewImg" src="" alt="Captured Photo Preview">
+        <div class="live-review-actions">
+          <button type="button" class="live-review-cancel" onclick="cancelLiveCapturedPhoto()">
+            <i class="fas fa-times"></i> Cancel
+          </button>
+          <button type="button" class="live-review-ok" onclick="confirmLiveCapturedPhoto()">
+            <i class="fas fa-check"></i> OK &amp; Upload
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="live-camera-controls">
