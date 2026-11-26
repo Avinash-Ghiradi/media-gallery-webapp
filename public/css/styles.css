@@ -759,29 +759,18 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.14);
   color: var(--white);
   border: 1.5px solid rgba(255, 255, 255, 0.35);
-  font-size: 0.95rem;
-  font-weight: 700;
-  border-radius: var(--radius-sm);
-}
-
-.live-review-rotate {
-  flex: 0.95;
-  min-height: 52px;
-  background: rgba(59, 130, 246, 0.25);
-  color: var(--white);
-  border: 1.5px solid rgba(96, 165, 250, 0.55);
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   border-radius: var(--radius-sm);
 }
 
 .live-review-ok {
-  flex: 1.35;
+  flex: 1.4;
   min-height: 52px;
   background: var(--success);
   color: var(--white);
   border: none;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   border-radius: var(--radius-sm);
 }
