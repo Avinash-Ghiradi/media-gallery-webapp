@@ -16,17 +16,18 @@ function checkAuthStatus(req) {
     return {
       isAuthenticated: true,
       username: req.session.user.username,
+      fullName: req.session.user.fullName || '',
       assignedClass: req.session.user.assignedClass || '',
       photoUrl: req.session.user.photoUrl || '',
       details: req.session.user.details || '',
       timestamp: now
     };
   }
-  return { isAuthenticated: false, username: '', assignedClass: '', photoUrl: '', details: '', timestamp: null };
+  return { isAuthenticated: false, username: '', fullName: '', assignedClass: '', photoUrl: '', details: '', timestamp: null };
 }
 
 /**
- * Normalize user record from either { password, assignedClass, photoUrl, details } or legacy string password
+ * Normalize user record from either { password, assignedClass, photoUrl, details, fullName } or legacy string password
  */
 function parseUserRecord(entry) {
   if (entry && typeof entry === 'object') {
@@ -34,14 +35,15 @@ function parseUserRecord(entry) {
       password: entry.password || '',
       assignedClass: entry.assignedClass || '',
       photoUrl: entry.photoUrl || '',
-      details: entry.details || ''
+      details: entry.details || '',
+      fullName: entry.fullName || ''
     };
   }
-  return { password: entry || '', assignedClass: '', photoUrl: '', details: '' };
+  return { password: entry || '', assignedClass: '', photoUrl: '', details: '', fullName: '' };
 }
 
 /**
- * Authenticate user with optional username and password
+ * Authenticate user with optional mobile/username and password
  */
 async function authenticateUser(req, password, inputUsername = '') {
   try {
@@ -54,6 +56,7 @@ async function authenticateUser(req, password, inputUsername = '') {
       if (userMatches && record.password === password) {
         req.session.user = {
           username: username,
+          fullName: record.fullName,
           assignedClass: record.assignedClass,
           photoUrl: record.photoUrl,
           details: record.details,
@@ -63,6 +66,7 @@ async function authenticateUser(req, password, inputUsername = '') {
         return {
           status: 'success',
           username: username,
+          fullName: record.fullName,
           assignedClass: record.assignedClass,
           photoUrl: record.photoUrl,
           details: record.details,
