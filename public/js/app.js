@@ -1213,7 +1213,7 @@ function addWatermarkToImage(file, eventName, className, callback) {
       ctx.fillText(watermarkText, x, y);
 
       if (logoLoaded && schoolLogo && schoolLogo.complete) {
-        const logoWidth = img.width * 0.4;
+        const logoWidth = targetW * 0.4;
         const logoAspectRatio = schoolLogo.naturalWidth / schoolLogo.naturalHeight;
         const logoHeight = logoWidth / logoAspectRatio;
         const logoX = canvas.width - logoWidth - borderMargin - 15;
@@ -1536,6 +1536,24 @@ async function confirmLiveCapturedPhoto() {
   await enqueuePhotoForBackgroundUpload(file, selection.eventName, selection.className);
 }
 
+function getBlobDimensions(blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth || img.width;
+      const height = img.naturalHeight || img.height;
+      URL.revokeObjectURL(url);
+      resolve({ width, height });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
 async function captureLiveCameraPhoto() {
   const video = document.getElementById('liveCameraVideo');
   const flash = document.getElementById('liveCameraFlash');
@@ -1552,6 +1570,8 @@ async function captureLiveCameraPhoto() {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const uniqueSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     const fileName = `photo_${timestamp}_${uniqueSuffix}.jpg`;
+    const videoHasSize = video.videoWidth > 0 && video.videoHeight > 0;
+    const videoIsLandscape = videoHasSize ? (video.videoWidth >= video.videoHeight) : null;
 
     // Prefer full-resolution ImageCapture API for crisp, clear camera photos
     const track = liveCameraStream && liveCameraStream.getVideoTracks()[0];
@@ -1559,11 +1579,20 @@ async function captureLiveCameraPhoto() {
       try {
         const imageCapture = new ImageCapture(track);
         const rawBlob = await imageCapture.takePhoto();
-        const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
-        const compressed = await compressPhotoHighQuality(rawFile, 2560, 0.92);
-        const finalFile = new File([compressed.blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
-        showLiveReviewOverlay(finalFile);
-        return;
+        const dims = await getBlobDimensions(rawBlob);
+        const photoIsLandscape = dims ? (dims.width >= dims.height) : null;
+
+        // Guard against Android ImageCapture.takePhoto() orientation bug where
+        // takePhoto() returns portrait for a landscape viewfinder (or vice versa)
+        if (!dims || videoIsLandscape === null || photoIsLandscape === videoIsLandscape) {
+          const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
+          const compressed = await compressPhotoHighQuality(rawFile, 2560, 0.92);
+          const finalFile = new File([compressed.blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+          showLiveReviewOverlay(finalFile);
+          return;
+        } else {
+          console.warn(`ImageCapture orientation mismatch (photo ${dims.width}x${dims.height} vs video ${video.videoWidth}x${video.videoHeight}), using video frame`);
+        }
       } catch (icErr) {
         console.warn('ImageCapture fallback to video frame:', icErr.message);
       }
