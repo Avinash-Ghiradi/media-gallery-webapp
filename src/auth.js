@@ -20,10 +20,11 @@ function checkAuthStatus(req) {
       assignedClass: req.session.user.assignedClass || '',
       photoUrl: req.session.user.photoUrl || '',
       details: req.session.user.details || '',
+      mustChangePassword: !!req.session.user.mustChangePassword,
       timestamp: now
     };
   }
-  return { isAuthenticated: false, username: '', fullName: '', assignedClass: '', photoUrl: '', details: '', timestamp: null };
+  return { isAuthenticated: false, username: '', fullName: '', assignedClass: '', photoUrl: '', details: '', mustChangePassword: false, timestamp: null };
 }
 
 /**
@@ -54,12 +55,14 @@ async function authenticateUser(req, password, inputUsername = '') {
       const record = parseUserRecord(users[username]);
       const userMatches = !cleanInputUser || username.toLowerCase() === cleanInputUser;
       if (userMatches && record.password === password) {
+        const mustChangePassword = record.password === 'Success@123';
         req.session.user = {
           username: username,
           fullName: record.fullName,
           assignedClass: record.assignedClass,
           photoUrl: record.photoUrl,
           details: record.details,
+          mustChangePassword: mustChangePassword,
           timestamp: Date.now()
         };
 
@@ -70,6 +73,7 @@ async function authenticateUser(req, password, inputUsername = '') {
           assignedClass: record.assignedClass,
           photoUrl: record.photoUrl,
           details: record.details,
+          mustChangePassword: mustChangePassword,
           message: 'Authentication successful'
         };
       }
