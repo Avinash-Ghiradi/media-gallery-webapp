@@ -17,23 +17,27 @@ function checkAuthStatus(req) {
       isAuthenticated: true,
       username: req.session.user.username,
       assignedClass: req.session.user.assignedClass || '',
+      photoUrl: req.session.user.photoUrl || '',
+      details: req.session.user.details || '',
       timestamp: now
     };
   }
-  return { isAuthenticated: false, username: '', assignedClass: '', timestamp: null };
+  return { isAuthenticated: false, username: '', assignedClass: '', photoUrl: '', details: '', timestamp: null };
 }
 
 /**
- * Normalize user record from either { password, assignedClass } or legacy string password
+ * Normalize user record from either { password, assignedClass, photoUrl, details } or legacy string password
  */
 function parseUserRecord(entry) {
   if (entry && typeof entry === 'object') {
     return {
       password: entry.password || '',
-      assignedClass: entry.assignedClass || ''
+      assignedClass: entry.assignedClass || '',
+      photoUrl: entry.photoUrl || '',
+      details: entry.details || ''
     };
   }
-  return { password: entry || '', assignedClass: '' };
+  return { password: entry || '', assignedClass: '', photoUrl: '', details: '' };
 }
 
 /**
@@ -51,6 +55,8 @@ async function authenticateUser(req, password, inputUsername = '') {
         req.session.user = {
           username: username,
           assignedClass: record.assignedClass,
+          photoUrl: record.photoUrl,
+          details: record.details,
           timestamp: Date.now()
         };
 
@@ -58,6 +64,8 @@ async function authenticateUser(req, password, inputUsername = '') {
           status: 'success',
           username: username,
           assignedClass: record.assignedClass,
+          photoUrl: record.photoUrl,
+          details: record.details,
           message: 'Authentication successful'
         };
       }
