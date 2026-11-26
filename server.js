@@ -480,6 +480,7 @@ app.post('/api/users/apply-default-password', auth.requireAdmin, async (req, res
    ========================================================================== */
 
 const DEFAULT_LOGO_URL = 'https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN';
+const CUSTOM_PHOTO_LOGO = path.join(__dirname, 'public', 'custom-photo-logo.png');
 const SERVER_WATERMARK_LOGO = path.join(__dirname, 'src', 'school_logo.png');
 let logoRestorePromise = null;
 
@@ -491,8 +492,6 @@ async function ensurePersistentAppLogoLoaded() {
         const buf = await googleService.loadAppLogoFromDrive();
         if (buf && buf.length > 0) {
           fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
-          fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
-          videoWatermark.reloadLogo();
           await regeneratePwaIconsFromBuffer(buf);
           return true;
         }
@@ -512,10 +511,16 @@ app.get('/api/branding', async (req, res) => {
     const stat = fs.statSync(CUSTOM_PUBLIC_LOGO);
     logoUrl = `/custom-logo.png?v=${Math.floor(stat.mtimeMs)}`;
   }
+  let photoLogoUrl = logoUrl;
+  if (fs.existsSync(CUSTOM_PHOTO_LOGO)) {
+    const pStat = fs.statSync(CUSTOM_PHOTO_LOGO);
+    photoLogoUrl = `/custom-photo-logo.png?v=${Math.floor(pStat.mtimeMs)}`;
+  }
   res.json({
     status: 'success',
     appName: 'Success Gallery',
-    logoUrl
+    logoUrl,
+    photoLogoUrl
   });
 });
 
@@ -557,8 +562,6 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
     }
     const buf = Buffer.from(base64, 'base64');
     fs.writeFileSync(CUSTOM_PUBLIC_LOGO, buf);
-    fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
-    videoWatermark.reloadLogo();
     await regeneratePwaIconsFromBuffer(buf);
     await googleService.saveAppLogoToDrive(buf);
     logoRestorePromise = Promise.resolve(true);
@@ -571,6 +574,32 @@ app.post('/api/branding/logo', auth.requireAdmin, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ status: 'error', message: 'Failed to save logo: ' + err.message });
+  }
+});
+
+app.post('/api/branding/photo-logo', auth.requireAdmin, async (req, res) => {
+  try {
+    const { logoDataUrl } = req.body;
+    if (!logoDataUrl || typeof logoDataUrl !== 'string' || !logoDataUrl.startsWith('data:image/')) {
+      return res.status(400).json({ status: 'error', message: 'Valid image file is required' });
+    }
+    const base64 = logoDataUrl.split(',')[1];
+    if (!base64) {
+      return res.status(400).json({ status: 'error', message: 'Invalid image data' });
+    }
+    const buf = Buffer.from(base64, 'base64');
+    fs.writeFileSync(CUSTOM_PHOTO_LOGO, buf);
+    fs.writeFileSync(SERVER_WATERMARK_LOGO, buf);
+    videoWatermark.reloadLogo();
+
+    const photoLogoUrl = `/custom-photo-logo.png?v=${Date.now()}`;
+    res.json({
+      status: 'success',
+      message: 'Photo & Video watermark logo updated!',
+      photoLogoUrl
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: 'Failed to save photo logo: ' + err.message });
   }
 });
 
