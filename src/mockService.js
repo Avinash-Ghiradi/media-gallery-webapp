@@ -11,9 +11,9 @@ let mockEvents = {};
 let recentUploadsLog = [];
 
 let mockUsers = [
-  { username: 'admin', password: 'password123', assignedClass: '', details: 'Administrator', photoUrl: '' },
-  { username: 'Avinash', password: 'Avinash123', assignedClass: '', details: 'Administrator', photoUrl: '' },
-  { username: 'Jyoti S', password: 'Mahi@0412', assignedClass: '', details: 'Administrator', photoUrl: '' }
+  { username: 'admin', password: 'password123', assignedClass: '', details: 'Administrator', photoUrl: '', fullName: 'Admin' },
+  { username: 'Avinash', password: 'Avinash123', assignedClass: '', details: 'Administrator', photoUrl: '', fullName: 'Avinash' },
+  { username: 'Jyoti S', password: 'Mahi@0412', assignedClass: '', details: 'Administrator', photoUrl: '', fullName: 'Jyoti S' }
 ];
 
 function getUsersFromSheet() {
@@ -23,7 +23,8 @@ function getUsersFromSheet() {
       password: u.password,
       assignedClass: u.assignedClass || '',
       details: u.details || '',
-      photoUrl: u.photoUrl || ''
+      photoUrl: u.photoUrl || '',
+      fullName: u.fullName || ''
     };
   });
   return map;
@@ -33,11 +34,11 @@ function getUsersListForAdmin() {
   return { status: 'success', data: mockUsers };
 }
 
-function addOrUpdateUser(username, password, assignedClass = '', details = '', photoUrl = '', originalUsername = '') {
+function addOrUpdateUser(username, password, assignedClass = '', details = '', photoUrl = '', originalUsername = '', fullName = '') {
   const cleanUser = (username || '').trim();
   const cleanPass = (password || '').trim();
   if (!cleanUser || !cleanPass) {
-    return { status: 'error', message: 'Username and password are required' };
+    return { status: 'error', message: 'Mobile number / username and password are required' };
   }
   const lookup = (originalUsername || cleanUser).trim().toLowerCase();
   const existing = mockUsers.find((u) => u.username.toLowerCase() === lookup);
@@ -47,16 +48,22 @@ function addOrUpdateUser(username, password, assignedClass = '', details = '', p
     existing.assignedClass = (assignedClass || '').trim();
     existing.details = (details || '').trim();
     existing.photoUrl = (photoUrl || '').trim();
-    return { status: 'success', message: `User "${cleanUser}" updated.` };
+    existing.fullName = (fullName || '').trim();
+    return { status: 'success', message: `User "${cleanFullNameOrUser(fullName, cleanUser)}" updated.` };
   }
   mockUsers.push({
     username: cleanUser,
     password: cleanPass,
     assignedClass: (assignedClass || '').trim(),
     details: (details || '').trim(),
-    photoUrl: (photoUrl || '').trim()
+    photoUrl: (photoUrl || '').trim(),
+    fullName: (fullName || '').trim()
   });
-  return { status: 'success', message: `User "${cleanUser}" added.` };
+  return { status: 'success', message: `User "${cleanFullNameOrUser(fullName, cleanUser)}" added.` };
+}
+
+function cleanFullNameOrUser(fullName, username) {
+  return (fullName || '').trim() || username;
 }
 
 function deleteUser(username) {
