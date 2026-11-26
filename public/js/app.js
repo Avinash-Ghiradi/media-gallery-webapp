@@ -1480,6 +1480,16 @@ window.addEventListener('load', () => {
   }
 });
 
+function toggleDeviceUploadCard() {
+  const card = document.getElementById('deviceUploadCard');
+  if (!card) return;
+  const isHidden = card.style.display === 'none';
+  card.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
 // Open in-app continuous camera viewfinder (falls back to native file input if unavailable)
 async function triggerDirectCamera() {
   const selection = getSelectedEventAndClass();
