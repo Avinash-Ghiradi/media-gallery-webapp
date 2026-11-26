@@ -1147,7 +1147,7 @@ function addWatermarkToImage(file, eventName, className, callback) {
   reader.onload = function(e) {
     const img = new Image();
     img.onload = function() {
-      const maxDim = 2560;
+      const maxDim = 1920;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const targetW = Math.max(1, Math.round(img.width * scale));
       const targetH = Math.max(1, Math.round(img.height * scale));
@@ -1238,7 +1238,7 @@ function addWatermarkToImage(file, eventName, className, callback) {
           });
         };
         reader.readAsDataURL(blob);
-      }, 'image/jpeg', 0.88);
+      }, 'image/jpeg', 0.84);
     };
     img.src = e.target.result;
   };
@@ -1713,8 +1713,8 @@ async function captureLiveCameraPhoto() {
         // takePhoto() returns portrait for a landscape viewfinder (or vice versa)
         if (!dims || videoIsLandscape === null || photoIsLandscape === videoIsLandscape) {
           const rawFile = new File([rawBlob], fileName, { type: rawBlob.type || 'image/jpeg', lastModified: Date.now() });
-          const compressed = await compressPhotoHighQuality(rawFile, 2560, 0.92);
-          const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.92) : compressed.blob;
+          const compressed = await compressPhotoHighQuality(rawFile, 1920, 0.84);
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(compressed.blob, extraRotateDeg, 0.84) : compressed.blob;
           const finalFile = new File([orientedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(finalFile);
           return;
@@ -1727,7 +1727,7 @@ async function captureLiveCameraPhoto() {
     }
 
     if (!video.videoWidth || !video.videoHeight) return;
-    const maxDim = 2560;
+    const maxDim = 1920;
     const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
     const w = Math.max(1, Math.round(video.videoWidth * scale));
     const h = Math.max(1, Math.round(video.videoHeight * scale));
@@ -1743,12 +1743,12 @@ async function captureLiveCameraPhoto() {
     await new Promise((resolve) => {
       canvas.toBlob(async (blob) => {
         if (blob) {
-          const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.92) : blob;
+          const orientedBlob = extraRotateDeg ? await rotateImageBlob(blob, extraRotateDeg, 0.84) : blob;
           const capturedFile = new File([orientedBlob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
           showLiveReviewOverlay(capturedFile);
         }
         resolve();
-      }, 'image/jpeg', 0.92);
+      }, 'image/jpeg', 0.84);
     });
   } finally {
     if (shutterBtn) shutterBtn.disabled = false;
@@ -1792,7 +1792,7 @@ async function enqueuePhotoForBackgroundUpload(file, eventName, className) {
   const id = `up_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   try {
-    const compressedOriginal = await compressPhotoHighQuality(file, 2560, 0.92);
+    const compressedOriginal = await compressPhotoHighQuality(file, 1920, 0.84);
     const files = [];
     const originalFiles = [];
 
