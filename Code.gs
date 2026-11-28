@@ -2204,7 +2204,8 @@ function generateHomeworkPdfInDrive(payload) {
       ttHtml += '</div></div>';
     }
 
-    var shortDate = friendlyDate ? String(friendlyDate).replace(/^[A-Za-z]+,\s*/, '').toUpperCase() : dateIso;
+    var isoParts = String(dateIso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    var shortDate = isoParts ? (isoParts[3] + '/' + isoParts[2] + '/' + isoParts[1]) : (friendlyDate || dateIso);
     var logoImgHtml = logoDataUri
       ? '<img src="' + logoDataUri + '" style="width:62px;height:62px;object-fit:contain;border-radius:50%;border:1px solid #e2e8f0;" />'
       : '';
