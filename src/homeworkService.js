@@ -109,11 +109,21 @@ function uniqueList(arr) {
 }
 
 function todayIso() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  } catch (e) {
+    const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    return now.toISOString().slice(0, 10);
+  }
+}
+
+function nowIstString() {
+  try {
+    return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Kolkata' }) + ' IST';
+  } catch (e) {
+    const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+    return now.toISOString().replace('T', ' ').slice(0, 19) + ' IST';
+  }
 }
 
 function normalizeDateStr(val) {
@@ -534,7 +544,7 @@ async function saveHomework(sessionUser, payload) {
     }
   }
 
-  const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const nowStr = nowIstString();
   const record = {
     id: payload.id || `HW-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
     date,
