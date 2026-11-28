@@ -491,6 +491,24 @@ app.post('/api/homework/upload', auth.requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/homework/tracker', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await homeworkService.getDailyTrafficLights(req.session.user, req.query.date);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/homework/mark-sent', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await homeworkService.markHomeworkSent(req.session.user, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 /* ==========================================================================
    MANAGE & DELETE ROUTES (Protected)
    ========================================================================== */
