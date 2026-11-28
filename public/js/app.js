@@ -132,6 +132,10 @@ function switchTab(tabName) {
     updateRecentBadge();
   } else if (tabName === 'whatsapp') {
     initializeWhatsAppTab();
+  } else if (tabName === 'homework') {
+    if (typeof initializeHomeworkTab === 'function') {
+      initializeHomeworkTab();
+    }
   } else if (tabName === 'delete') {
     loadEventsForDeletion();
   } else if (tabName === 'users') {
