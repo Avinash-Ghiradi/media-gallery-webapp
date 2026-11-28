@@ -21,5 +21,11 @@ module.exports = {
   // Optional Google Apps Script Web App Bridge URL
   gasWebAppUrl: process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbwbR9za-b4cKtq2XjdEMxjnum0HuNMm_6cBuUYpaRt1_LN5oBRYDk2Vl_OtX9QoXV4gvg/exec',
 
+  // Daily Homework & Examination Management Spreadsheet / GAS URL
+  homeworkSpreadsheetId: process.env.HOMEWORK_SPREADSHEET_ID || '1Wpw7F1Jws6zxkX1qev3kGQAig3zMOEigLhXF757fMAM',
+  homeworkFolderId: process.env.HOMEWORK_FOLDER_ID || '1pTDy4B2E5gF6hecrwMSDyQ2gbL1GgJP3',
+  homeworkGasUrl: process.env.HOMEWORK_GAS_WEBAPP_URL || '',
+  principalCode: process.env.PRINCIPAL_CODE || 'PRINCIPAL2026',
+
   defaultWatermark: process.env.DEFAULT_WATERMARK !== 'false'
 };
