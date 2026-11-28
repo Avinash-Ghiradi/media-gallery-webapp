@@ -136,6 +136,12 @@ function switchTab(tabName) {
     loadEventsForDeletion();
   } else if (tabName === 'users') {
     loadUsersForAdmin();
+  } else if (tabName === 'homework') {
+    if (typeof loadHomeworkModule === 'function') loadHomeworkModule();
+  } else if (tabName === 'exams') {
+    if (typeof loadExamsModule === 'function') loadExamsModule();
+  } else if (tabName === 'timetable') {
+    if (typeof loadTimetableModule === 'function') loadTimetableModule();
   }
 }
 
