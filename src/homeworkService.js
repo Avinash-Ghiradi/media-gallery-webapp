@@ -462,7 +462,7 @@ async function ensureHomeworkHeaders(sheets) {
   const firstRow = (res.data.values && res.data.values[0]) || [];
   if (firstRow.length > 0) return firstRow.map(h => String(h || '').trim());
 
-  const defaultHeaders = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt'];
+  const defaultHeaders = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType', 'VideoLink', 'TeacherNote', 'AttachmentUrl', 'PdfNotesUrl'];
   await sheets.spreadsheets.values.update({
     spreadsheetId: config.homeworkSheetId,
     range: 'Homework!A1:H1',
@@ -482,6 +482,10 @@ function normalizeHwRow(r) {
     teacherName: r.teachername || r.teacher || r.createdby || '',
     teacherPhone: r.teacherphone || r.phone || '',
     description: r.description || r.homework || r.details || r.content || r.task || '',
+    videoLink: r.videolink || r.video || '',
+    teacherNote: r.teachernote || r.note || '',
+    attachmentUrl: r.attachmenturl || r.attachment || '',
+    pdfNotesUrl: r.pdfnotesurl || r.pdfnotes || '',
     updatedAt: r.updatedat || r.createdat || r.timestamp || '',
     _rowIndex: r._rowIndex
   };
@@ -540,6 +544,10 @@ function buildRowFromHeaders(headers, record) {
     if (key === 'teachername' || key === 'teacher' || key === 'createdby') return record.teacherName;
     if (key === 'teacherphone' || key === 'phone') return record.teacherPhone;
     if (key === 'description' || key === 'homework' || key === 'details' || key === 'content' || key === 'task') return record.description;
+    if (key === 'videolink' || key === 'video') return record.videoLink || '';
+    if (key === 'teachernote' || key === 'note') return record.teacherNote || '';
+    if (key === 'attachmenturl' || key === 'attachment') return record.attachmentUrl || '';
+    if (key === 'pdfnotesurl' || key === 'pdfnotes') return record.pdfNotesUrl || '';
     if (key === 'updatedat' || key === 'createdat' || key === 'timestamp') return record.updatedAt;
     if (key === 'status') return 'ACTIVE';
     return '';
@@ -553,6 +561,10 @@ async function saveHomework(sessionUser, payload) {
   const subject = (payload.subject || '').trim();
   const homeworkType = (payload.homeworkType || 'Writing').trim();
   const description = (payload.description || '').trim();
+  const videoLink = (payload.videoLink || '').trim();
+  const teacherNote = (payload.teacherNote || '').trim();
+  const attachmentUrl = (payload.attachmentUrl || '').trim();
+  const pdfNotesUrl = (payload.pdfNotesUrl || '').trim();
 
   if (!className || !subject || !description) {
     return { status: 'error', message: 'Class, Subject, and Homework description are required.' };
@@ -576,6 +588,10 @@ async function saveHomework(sessionUser, payload) {
     teacherName: profile.teacherName,
     teacherPhone: profile.teacherPhone,
     description,
+    videoLink,
+    teacherNote,
+    attachmentUrl,
+    pdfNotesUrl,
     updatedAt: nowStr
   };
 
@@ -805,6 +821,18 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
       lines.push(`*${idx + 1}. ${item.subject}*`);
       lines.push(`   📝 *Type:* ${hwType}`);
       lines.push(`   📝 ${item.description}`);
+      if (item.teacherNote) {
+        lines.push(`   📌 *Note:* ${item.teacherNote}`);
+      }
+      if (item.videoLink) {
+        lines.push(`   🎥 *Video:* ${item.videoLink}`);
+      }
+      if (item.attachmentUrl) {
+        lines.push(`   🖼️ *Image:* ${item.attachmentUrl}`);
+      }
+      if (item.pdfNotesUrl) {
+        lines.push(`   📄 *PDF Notes:* ${item.pdfNotesUrl}`);
+      }
       if (item.teacherName) {
         lines.push(`   👨‍🏫 *Teacher:* ${item.teacherName}`);
       }
@@ -901,6 +929,24 @@ async function generateHomeworkPdf(sessionUser, payload) {
   };
 }
 
+async function uploadHomeworkAttachment(payload) {
+  if (!payload || !payload.base64Data) {
+    return { status: 'error', message: 'No file data provided.' };
+  }
+  if (!config.gasWebAppUrl) {
+    return { status: 'error', message: 'GAS WebApp URL is required for file uploads.' };
+  }
+  const gasRes = await callGasBridge('uploadHomeworkFile', {
+    fileName: payload.fileName || `homework_${Date.now()}`,
+    contentType: payload.contentType || 'application/octet-stream',
+    base64Data: payload.base64Data
+  });
+  if (gasRes && gasRes.status === 'success') {
+    return gasRes;
+  }
+  return { status: 'error', message: (gasRes && gasRes.message) || 'Failed to upload homework file.' };
+}
+
 module.exports = {
   ensureHomeworkSheets,
   resolveTeacherProfile,
@@ -908,5 +954,6 @@ module.exports = {
   saveHomework,
   deleteHomework,
   getConsolidatedHomework,
-  generateHomeworkPdf
+  generateHomeworkPdf,
+  uploadHomeworkAttachment
 };
