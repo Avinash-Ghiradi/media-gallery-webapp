@@ -1,4 +1,4 @@
-const CACHE_NAME = 'media-gallery-v38';
+const CACHE_NAME = 'media-gallery-v39';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
