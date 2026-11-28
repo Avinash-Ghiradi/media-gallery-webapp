@@ -773,7 +773,10 @@
             <div class="card">
               <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span><i class="fas fa-list-check"></i> Submitted Homework for Selected Date</span>
-                <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <select id="hwSubmittedClassFilter" onchange="loadMyHomeworkList()" style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem; background: #fff;">
+                    <option value="">All Classes</option>
+                  </select>
                   <input type="date" id="hwSubmittedDate" onchange="syncHomeworkDate(this.value)" style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem;">
                   <button type="button" class="btn-secondary" style="padding: 6px 10px; font-size: 0.85rem;" onclick="loadMyHomeworkList()">
                     <i class="fas fa-sync-alt"></i>
