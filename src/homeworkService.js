@@ -7,6 +7,17 @@ const config = require('./config');
 const SCHOOL_NAME = 'Success School Indi';
 const FALLBACK_FILE = path.join(__dirname, '..', 'homework_data.json');
 
+const DEFAULT_CLASSES = [
+  'Nursery', 'LKG A', 'LKG B', 'UKG',
+  '1st Standard', '2nd Standard', '3rd Standard A', '3rd Standard B',
+  '4th Standard', '5th Standard', '6th Standard'
+];
+
+const DEFAULT_SUBJECTS = [
+  'English', 'Kannada', 'Hindi', 'Mathematics', 'Science',
+  'Social', 'EVS', 'Computer', 'GK', 'Reasoning', 'Coaching - Maths'
+];
+
 let sheetsClient = null;
 let ensureSheetsPromise = null;
 let sheetsEnsured = false;
@@ -61,6 +72,21 @@ function splitCsv(val) {
     .filter(Boolean);
 }
 
+function uniqueList(arr) {
+  const seen = new Set();
+  const out = [];
+  for (const item of arr) {
+    const clean = String(item || '').trim();
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
 function todayIso() {
   const now = new Date();
   const y = now.getFullYear();
@@ -84,36 +110,24 @@ function readFallbackData() {
     }
   } catch (e) {}
   return {
-    teachers: [
-      { id: 'T1', name: 'Mr. Akash Jalageri', phone: '919380260297', classes: '4th Standard, 5th Standard, 6th Standard', subjects: 'Mathematics, Reasoning, Coaching - Maths', isClassTeacher: 'YES' },
-      { id: 'T2', name: 'Ms. Disha S Rathod', phone: '916361999247', classes: '1st Standard, 2nd Standard', subjects: 'English, Hindi', isClassTeacher: 'YES' },
-      { id: 'T3', name: 'Mrs. Jyoti Jadava', phone: '917259731118', classes: 'Nursery, LKG A, LKG B, UKG', subjects: 'Kannada', isClassTeacher: 'YES' },
-      { id: 'T4', name: 'Mrs. Jyoti Sanath', phone: '919901583738', classes: '1st Standard, 2nd Standard', subjects: 'Mathematics', isClassTeacher: 'YES' },
-      { id: 'T5', name: 'Mrs. Minal Patil', phone: '918668878802', classes: 'Nursery, LKG A, LKG B, UKG', subjects: 'Mathematics', isClassTeacher: 'YES' },
-      { id: 'T6', name: 'Ms. Nagma M Kazi', phone: '919449540726', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Science', isClassTeacher: 'YES' },
-      { id: 'T7', name: 'Mrs. Rekha Kolekar', phone: '918830471427', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'English', isClassTeacher: 'YES' },
-      { id: 'T8', name: 'Ms. Chandrikha Pattar', phone: '919901583739', classes: '1st Standard, 2nd Standard', subjects: 'Kannada, EVS', isClassTeacher: 'YES' },
-      { id: 'T10', name: 'Ms. Sneha G', phone: '918431889115', classes: 'Nursery, LKG A, LKG B, UKG, 6th Standard', subjects: 'EVS, Computer', isClassTeacher: 'YES' },
-      { id: 'T11', name: 'Ms. Sonali S Paradeshi', phone: '918073323445', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Hindi', isClassTeacher: 'YES' },
-      { id: 'T12', name: 'Mrs. Sridevi Devar', phone: '919566267696', classes: 'Nursery, LKG A, LKG B, UKG', subjects: 'English', isClassTeacher: 'YES' },
-      { id: 'T13', name: 'Mrs. Trupti R Chabukswar', phone: '919980352950', classes: '3rd Standard A, 3rd Standard B, 6th Standard', subjects: 'Mathematics, Science, GK', isClassTeacher: 'YES' },
-      { id: 'T14', name: 'Mrs. Ujwala S Barikai', phone: '917204017903', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Kannada', isClassTeacher: 'YES' },
-      { id: 'T15', name: 'Ms. Vaishali P Badiger', phone: '919823996329', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Social', isClassTeacher: 'YES' }
+    users: [
+      { username: '9900944375', classTeacher: '', designation: 'Administrator', fullName: 'Mr Avinash Ghiradi', classes: '', subjects: '' },
+      { username: '9964882070', classTeacher: '', designation: 'Administrator', fullName: 'Mr Siddappa Kamble', classes: '', subjects: '' },
+      { username: '9901583738', classTeacher: '', designation: 'Administrator', fullName: 'Mrs. Jyoti Sanath', classes: '1st Standard, 2nd Standard', subjects: 'Mathematics' },
+      { username: '9980352950', classTeacher: '', designation: 'Principal', fullName: 'Mrs. Trupti R Chabukswar', classes: '3rd Standard A, 3rd Standard B, 6th Standard', subjects: 'Mathematics, Science, GK' },
+      { username: '7259731118', classTeacher: 'Nursery', designation: 'Ass. Teacher', fullName: 'Mrs. Jyoti Jadava', classes: 'Nursery, LKG A, LKG B, UKG', subjects: 'Kannada' },
+      { username: '8431889115', classTeacher: 'LKG A', designation: 'Ass. Teacher', fullName: 'Ms. Sneha G', classes: 'Nursery, LKG A, LKG B, UKG, 6th Standard', subjects: 'EVS, Computer' },
+      { username: '8668878802', classTeacher: 'LKG B', designation: 'Ass. Teacher', fullName: 'Mrs. Minal Patil', classes: 'Nursery, LKG A, LKG B, UKG', subjects: 'Mathematics' },
+      { username: '9566267696', classTeacher: 'UKG', designation: 'Ass. Teacher', fullName: 'Mrs. Sridevi Devar', classes: 'Nursery, LKG A, LKG B, UKG', subjects: 'English' },
+      { username: '6361999247', classTeacher: '1st Standard', designation: 'Ass. Teacher', fullName: 'Ms.Disha S Rathod', classes: '1st Standard, 2nd Standard', subjects: 'English, Hindi' },
+      { username: '9901583738', classTeacher: '2nd Standard', designation: 'Ass. Teacher', fullName: 'Ms. Chandrikha Pattar', classes: '1st Standard, 2nd Standard', subjects: 'Kannada, EVS' },
+      { username: '9823996329', classTeacher: '3rd Standard A', designation: 'Ass. Teacher', fullName: 'Ms. Vaishali P Badiger', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Social' },
+      { username: '7204017903', classTeacher: '3rd Standard B', designation: 'Ass. Teacher', fullName: 'Mrs. Ujwala S Barikai', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Kannada' },
+      { username: '9449540726', classTeacher: '4th Standard', designation: 'Ass. Teacher', fullName: 'Ms. Nagma M Kazi', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Science' },
+      { username: '8830471427', classTeacher: '5th Standard', designation: 'Ass. Teacher', fullName: 'Mrs. Rekha Kolekar', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'English' },
+      { username: '9380260297', classTeacher: '6th Standard', designation: 'Ass. Teacher', fullName: 'Mr. Akash Jalageri', classes: '4th Standard, 5th Standard, 6th Standard', subjects: 'Mathematics, Reasoning, Coaching - Maths' },
+      { username: '8073323445', classTeacher: '', designation: 'Ass. Teacher', fullName: 'Ms. Sonali S Paradeshi', classes: '3rd Standard A, 3rd Standard B, 4th Standard, 5th Standard, 6th Standard', subjects: 'Hindi' }
     ],
-    classes: [
-      { id: 'NUR', name: 'Nursery', classTeacher: 'Mrs. Jyoti Jadava' },
-      { id: 'LKGA', name: 'LKG A', classTeacher: 'Mrs. Minal Patil' },
-      { id: 'LKGB', name: 'LKG B', classTeacher: 'Ms. Sneha G' },
-      { id: 'UKG', name: 'UKG', classTeacher: 'Mrs. Sridevi Devar' },
-      { id: '1', name: '1st Standard', classTeacher: 'Ms. Disha S Rathod' },
-      { id: '2', name: '2nd Standard', classTeacher: 'Mrs. Jyoti Sanath' },
-      { id: '3A', name: '3rd Standard A', classTeacher: 'Ms. Vaishali P Badiger' },
-      { id: '3B', name: '3rd Standard B', classTeacher: 'Mrs. Ujwala S Barikai' },
-      { id: '4', name: '4th Standard', classTeacher: 'Ms. Nagma M Kazi' },
-      { id: '5', name: '5th Standard', classTeacher: 'Ms. Vaishali P Badiger' },
-      { id: '6', name: '6th Standard', classTeacher: 'Mr. Akash Jalageri' }
-    ],
-    subjects: ['English', 'Kannada', 'Hindi', 'Mathematics', 'Science', 'Social', 'EVS', 'Computer', 'GK', 'Reasoning', 'Coaching - Maths'],
     groups: [],
     homework: []
   };
@@ -152,7 +166,7 @@ async function ensureHomeworkSheets() {
     try {
       const ss = await sheets.spreadsheets.get({ spreadsheetId: config.homeworkSheetId });
       const existingTitles = new Set((ss.data.sheets || []).map(s => s.properties.title));
-      const requiredTabs = ['Teachers', 'Classes', 'Subjects', 'WhatsAppGroups', 'Homework'];
+      const requiredTabs = ['WhatsAppGroups', 'Homework'];
       const missingTabs = requiredTabs.filter(t => !existingTitles.has(t));
 
       if (missingTabs.length > 0) {
@@ -165,27 +179,11 @@ async function ensureHomeworkSheets() {
         console.log('Created homework tabs in Media Gallery Google Sheet:', missingTabs.join(', '));
       }
 
-      const fallback = readFallbackData();
       const seedSpecs = [
-        {
-          tab: 'Teachers',
-          headers: ['Teacher ID', 'Name', 'Phone', 'Classes', 'Subjects', 'IsClassTeacher'],
-          rows: fallback.teachers.map(t => [t.id, t.name, t.phone, t.classes, t.subjects, t.isClassTeacher])
-        },
-        {
-          tab: 'Classes',
-          headers: ['Class ID', 'Class Name', 'ClassTeacher'],
-          rows: fallback.classes.map(c => [c.id, c.name, c.classTeacher])
-        },
-        {
-          tab: 'Subjects',
-          headers: ['Subject ID', 'Subject Name'],
-          rows: fallback.subjects.map((s, idx) => [`SUB${idx + 1}`, s])
-        },
         {
           tab: 'WhatsAppGroups',
           headers: ['Group ID', 'Group Name', 'Class', 'PhoneOrGroupLink', 'IsActive'],
-          rows: fallback.classes.map((c, idx) => [`G${idx + 1}`, `${c.name} Parents`, c.name, '', 'YES'])
+          rows: DEFAULT_CLASSES.map((c, idx) => [`G${idx + 1}`, `${c} Parents`, c, '', 'YES'])
         },
         {
           tab: 'Homework',
@@ -242,130 +240,128 @@ async function readSheetTab(tabName) {
 }
 
 async function loadMetadata() {
-  const [teachersTab, classesTab, subjectsTab, groupsTab] = await Promise.all([
-    readSheetTab('Teachers'),
-    readSheetTab('Classes'),
-    readSheetTab('Subjects'),
+  const [usersTab, groupsTab] = await Promise.all([
+    readSheetTab(config.usersSheetName || 'users'),
     readSheetTab('WhatsAppGroups')
   ]);
 
   const fallback = readFallbackData();
 
-  const teachers = teachersTab && teachersTab.items.length > 0
-    ? teachersTab.items.map(r => ({
-        id: r.teacherid || r.id || '',
-        name: r.name || r.teachername || '',
-        phone: r.phone || r.mobile || '',
-        classes: r.classes || r.assignedclasses || '',
-        subjects: r.subjects || r.assignedsubjects || '',
-        isClassTeacher: (r.isclassteacher || '').toUpperCase()
-      }))
-    : fallback.teachers;
+  const usersList = usersTab && usersTab.items.length > 0
+    ? usersTab.items
+        .filter(r => (r.username || r.mobile) && !(r.username || '').startsWith('__BRANDING_'))
+        .map(r => ({
+          username: r.username || r.mobile || '',
+          classTeacher: r.classteacher || r.assignedclass || '',
+          designation: r.designation || r.details || '',
+          fullName: r.fullname || r.name || '',
+          classes: r.classes || '',
+          subjects: r.subjects || ''
+        }))
+    : fallback.users;
 
-  const classes = classesTab && classesTab.items.length > 0
-    ? classesTab.items.map(r => ({
-        id: r.classid || r.id || '',
-        name: r.classname || r.name || r.class || '',
-        classTeacher: r.classteacher || r.teacher || ''
-      })).filter(c => c.name)
-    : fallback.classes;
+  const allClasses = uniqueList([
+    ...DEFAULT_CLASSES,
+    ...usersList.flatMap(u => [...splitCsv(u.classTeacher), ...splitCsv(u.classes)])
+  ]);
 
-  const subjects = subjectsTab && subjectsTab.items.length > 0
-    ? subjectsTab.items.map(r => r.subjectname || r.name || r.subject || '').filter(Boolean)
-    : fallback.subjects;
+  const allSubjects = uniqueList([
+    ...DEFAULT_SUBJECTS,
+    ...usersList.flatMap(u => splitCsv(u.subjects))
+  ]);
 
   const groups = groupsTab && groupsTab.items.length > 0
     ? groupsTab.items.map(r => ({
         id: r.groupid || r.id || '',
         name: r.groupname || r.name || '',
         className: r.class || r.classname || '',
-        phoneOrLink: r.phone || r.grouplink || r.link || r.whatsapp || '',
+        phoneOrLink: r.phoneorgrouplink || r.phone || r.grouplink || r.link || r.whatsapp || '',
         isActive: (r.isactive || 'YES').toUpperCase()
       }))
     : fallback.groups;
 
   return {
-    teachers,
-    classes,
-    subjects,
+    usersList,
+    allClasses,
+    allSubjects,
     groups,
-    source: teachersTab ? 'google-sheet' : 'fallback'
+    source: usersTab ? 'google-sheet' : 'fallback'
   };
 }
 
-function isAdminUser(sessionUser) {
+function isAdminDesignation(designation) {
+  const d = String(designation || '').trim().toLowerCase();
+  return d === 'administrator' || d === 'admin' || d === 'principal';
+}
+
+function isAdminUser(sessionUser, matchedRow) {
   if (!sessionUser) return false;
   const uname = String(sessionUser.username || '').trim().toLowerCase();
   const aClass = String(sessionUser.assignedClass || '').trim().toUpperCase();
-  return uname === 'admin' || aClass === 'ALL';
+  if (uname === 'admin' || aClass === 'ALL') return true;
+  if (isAdminDesignation(sessionUser.details)) return true;
+  if (matchedRow && isAdminDesignation(matchedRow.designation)) return true;
+  return false;
 }
 
 async function resolveTeacherProfile(sessionUser) {
   const meta = await loadMetadata();
-  const admin = isAdminUser(sessionUser);
 
   const userPhone = normalizePhone(sessionUser && sessionUser.username);
   const userNameNorm = normalizeName(sessionUser && (sessionUser.fullName || sessionUser.username));
-  const userAssignedClass = String((sessionUser && sessionUser.assignedClass) || '').trim();
 
-  let matchedTeacher = null;
-  if (!admin && sessionUser) {
-    matchedTeacher = meta.teachers.find(t => {
-      const tPhone = normalizePhone(t.phone);
-      const tName = normalizeName(t.name);
-      if (userPhone && tPhone && userPhone === tPhone) return true;
-      if (userNameNorm && tName && (userNameNorm === tName || tName.includes(userNameNorm) || userNameNorm.includes(tName))) return true;
+  let matchedUser = null;
+  if (sessionUser) {
+    matchedUser = meta.usersList.find(u => {
+      const uPhone = normalizePhone(u.username);
+      const uName = normalizeName(u.fullName);
+      if (userPhone && uPhone && userPhone === uPhone) {
+        if (userNameNorm && uName && userNameNorm !== uName) {
+          // If two rows share a phone number, prefer exact name match
+          return false;
+        }
+        return true;
+      }
+      return false;
+    }) || meta.usersList.find(u => {
+      const uPhone = normalizePhone(u.username);
+      const uName = normalizeName(u.fullName);
+      if (userPhone && uPhone && userPhone === uPhone) return true;
+      if (userNameNorm && uName && (userNameNorm === uName || uName.includes(userNameNorm) || userNameNorm.includes(uName))) return true;
       return false;
     }) || null;
   }
 
-  const allClassNames = meta.classes.map(c => c.name);
-  let assignedClasses = [];
-  let assignedSubjects = [];
+  const admin = isAdminUser(sessionUser, matchedUser);
 
-  if (admin) {
-    assignedClasses = allClassNames;
-    assignedSubjects = meta.subjects;
-  } else if (matchedTeacher) {
-    assignedClasses = splitCsv(matchedTeacher.classes);
-    assignedSubjects = splitCsv(matchedTeacher.subjects);
-  } else if (userAssignedClass && userAssignedClass.toUpperCase() !== 'ALL') {
-    assignedClasses = [userAssignedClass];
-    assignedSubjects = meta.subjects;
-  }
+  const rowClasses = splitCsv((matchedUser && matchedUser.classes) || (sessionUser && sessionUser.assignedClasses) || '');
+  const rowSubjects = splitCsv((matchedUser && matchedUser.subjects) || (sessionUser && sessionUser.assignedSubjects) || '');
+  const rowClassTeacher = splitCsv((matchedUser && matchedUser.classTeacher) || (sessionUser && sessionUser.assignedClass) || '')
+    .filter(c => c.toUpperCase() !== 'ALL');
 
-  // Determine which class(es) this user is the Class Teacher of
-  let classTeacherOf = [];
-  if (admin) {
-    classTeacherOf = allClassNames;
-  } else {
-    const teacherNameNorm = matchedTeacher ? normalizeName(matchedTeacher.name) : userNameNorm;
-    classTeacherOf = meta.classes
-      .filter(c => {
-        const ctNorm = normalizeName(c.classTeacher);
-        return ctNorm && teacherNameNorm && (ctNorm === teacherNameNorm || ctNorm.includes(teacherNameNorm) || teacherNameNorm.includes(ctNorm));
-      })
-      .map(c => c.name);
+  const assignedClasses = admin
+    ? meta.allClasses
+    : (rowClasses.length > 0 ? rowClasses : rowClassTeacher);
 
-    // Fallback: if Classes sheet didn't match by name, but teacher is marked IsClassTeacher=YES and has an assignedClass
-    if (classTeacherOf.length === 0 && matchedTeacher && matchedTeacher.isClassTeacher === 'YES' && userAssignedClass) {
-      classTeacherOf = [userAssignedClass];
-    }
-  }
+  const assignedSubjects = admin
+    ? meta.allSubjects
+    : (rowSubjects.length > 0 ? rowSubjects : meta.allSubjects);
+
+  const classTeacherOf = admin ? meta.allClasses : rowClassTeacher;
 
   return {
     status: 'success',
     source: meta.source,
     isAdmin: admin,
-    teacherName: matchedTeacher ? matchedTeacher.name : (sessionUser.fullName || sessionUser.username || 'Teacher'),
-    teacherId: matchedTeacher ? matchedTeacher.id : '',
-    teacherPhone: matchedTeacher ? matchedTeacher.phone : (sessionUser.username || ''),
+    teacherName: (matchedUser && matchedUser.fullName) || (sessionUser && (sessionUser.fullName || sessionUser.username)) || 'Teacher',
+    teacherPhone: (matchedUser && matchedUser.username) || (sessionUser && sessionUser.username) || '',
+    designation: (matchedUser && matchedUser.designation) || (sessionUser && sessionUser.details) || '',
     assignedClasses,
     assignedSubjects,
     isClassTeacher: classTeacherOf.length > 0 || admin,
     classTeacherOf,
-    allClasses: allClassNames,
-    allSubjects: meta.subjects,
+    allClasses: meta.allClasses,
+    allSubjects: meta.allSubjects,
     groups: meta.groups
   };
 }
@@ -604,7 +600,6 @@ async function getConsolidatedHomework(sessionUser, date, className) {
     x => x.date === targetDate && x.className.toLowerCase() === selectedClass.toLowerCase()
   );
 
-  // Build consolidated WhatsApp message
   const friendlyDate = formatDateFriendly(targetDate);
   const lines = [
     `📚 *${SCHOOL_NAME}*`,
@@ -629,7 +624,6 @@ async function getConsolidatedHomework(sessionUser, date, className) {
   lines.push(`_Class Teacher: ${profile.teacherName}_`);
   const formattedMessage = lines.join('\n').trim();
 
-  // Match WhatsApp group for this class
   const group = profile.groups.find(
     g => g.isActive !== 'NO' && g.className.toLowerCase() === selectedClass.toLowerCase()
   ) || null;
