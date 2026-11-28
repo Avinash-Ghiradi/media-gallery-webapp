@@ -5,6 +5,10 @@
 let hwProfile = null;
 let hwListCache = [];
 let hwConsolidatedData = null;
+let hwPendingImageFile = null;
+let hwPendingPdfFile = null;
+let hwExistingAttachmentUrl = '';
+let hwExistingPdfNotesUrl = '';
 
 function getTodayIsoDate() {
   try {
@@ -178,12 +182,172 @@ async function loadMyHomeworkList() {
           </div>
         </div>
         <div style="margin-top: 8px; white-space: pre-wrap; color: #334155; font-size: 0.94rem;">${escapeHwHtml(item.description)}</div>
+        ${item.teacherNote ? `<div style="margin-top: 6px; font-size: 0.85rem; color: #475569;"><i class="fas fa-sticky-note"></i> <strong>Note:</strong> ${escapeHwHtml(item.teacherNote)}</div>` : ''}
+        <div style="margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.82rem;">
+          ${item.videoLink ? `<a href="${escapeHwHtml(item.videoLink)}" target="_blank" rel="noopener noreferrer" style="color: #dc2626;"><i class="fab fa-youtube"></i> Video Link</a>` : ''}
+          ${item.attachmentUrl ? `<a href="${escapeHwHtml(item.attachmentUrl)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb;"><i class="fas fa-image"></i> Image Attachment</a>` : ''}
+          ${item.pdfNotesUrl ? `<a href="${escapeHwHtml(item.pdfNotesUrl)}" target="_blank" rel="noopener noreferrer" style="color: #7c3aed;"><i class="fas fa-file-pdf"></i> PDF Notes</a>` : ''}
+        </div>
       </div>
     `).join('');
   } catch (err) {
     console.error('loadMyHomeworkList error:', err);
     listEl.innerHTML = '<p style="color: #ef4444;">Error loading homework list.</p>';
   }
+}
+
+function addHomeworkItemRow(initialValue = '') {
+  const container = document.getElementById('hwItemsList');
+  if (!container) return;
+  const count = container.querySelectorAll('.hw-item-row').length + 1;
+  const row = document.createElement('div');
+  row.className = 'hw-item-row';
+  row.style.cssText = 'display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;';
+  row.innerHTML = `
+    <span class="hw-item-num" style="font-weight: 700; padding-top: 10px; min-width: 20px; color: #334155;">${count}.</span>
+    <textarea class="hw-item-input" rows="2" placeholder="Enter homework ${count}..." style="flex: 1; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+    <button type="button" class="btn-secondary" style="padding: 8px 10px; color: #dc2626; margin-top: 2px;" onclick="removeHomeworkItemRow(this)" title="Remove">
+      <i class="fas fa-times"></i>
+    </button>
+  `;
+  row.querySelector('.hw-item-input').value = initialValue;
+  container.appendChild(row);
+  renumberHomeworkRows();
+}
+
+function removeHomeworkItemRow(btn) {
+  const row = btn.closest('.hw-item-row');
+  if (row) row.remove();
+  renumberHomeworkRows();
+}
+
+function renumberHomeworkRows() {
+  const container = document.getElementById('hwItemsList');
+  if (!container) return;
+  const rows = container.querySelectorAll('.hw-item-row');
+  rows.forEach((r, idx) => {
+    const numEl = r.querySelector('.hw-item-num');
+    const ta = r.querySelector('.hw-item-input');
+    if (numEl) numEl.textContent = `${idx + 1}.`;
+    if (ta) ta.placeholder = `Enter homework ${idx + 1}...`;
+  });
+}
+
+function setHomeworkItemValues(values) {
+  const container = document.getElementById('hwItemsList');
+  if (!container) return;
+  const list = values && values.length > 0 ? values : [''];
+  container.innerHTML = '';
+  list.forEach((val, idx) => {
+    if (idx === 0) {
+      const row = document.createElement('div');
+      row.className = 'hw-item-row';
+      row.style.cssText = 'display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;';
+      row.innerHTML = `
+        <span class="hw-item-num" style="font-weight: 700; padding-top: 10px; min-width: 20px; color: #334155;">1.</span>
+        <textarea class="hw-item-input" rows="2" placeholder="Enter homework 1..." style="flex: 1; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+      `;
+      row.querySelector('.hw-item-input').value = val;
+      container.appendChild(row);
+    } else {
+      addHomeworkItemRow(val);
+    }
+  });
+}
+
+function getCombinedHomeworkDescription() {
+  const inputs = Array.from(document.querySelectorAll('#hwItemsList .hw-item-input'))
+    .map(el => el.value.trim())
+    .filter(Boolean);
+  if (inputs.length === 0) return '';
+  if (inputs.length === 1) return inputs[0];
+  return inputs.map((txt, idx) => `${idx + 1}. ${txt}`).join('\n');
+}
+
+function handleHomeworkImageSelect(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  hwPendingImageFile = file;
+  hwExistingAttachmentUrl = '';
+  const box = document.getElementById('hwImagePreviewBox');
+  if (box) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      box.style.display = 'block';
+      box.innerHTML = `
+        <div style="display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 10px;">
+          <img src="${e.target.result}" alt="Preview" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px;">
+          <span style="font-size: 0.85rem; color: #334155;">${escapeHwHtml(file.name)}</span>
+          <button type="button" class="btn-secondary" style="padding: 4px 8px; color: #dc2626;" onclick="clearHomeworkImage()"><i class="fas fa-times"></i></button>
+        </div>
+      `;
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function clearHomeworkImage() {
+  hwPendingImageFile = null;
+  hwExistingAttachmentUrl = '';
+  const cam = document.getElementById('hwCameraInput');
+  const gal = document.getElementById('hwGalleryInput');
+  const box = document.getElementById('hwImagePreviewBox');
+  if (cam) cam.value = '';
+  if (gal) gal.value = '';
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+function handleHomeworkPdfSelect(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    showStatus('PDF file must be 10MB or smaller.', 'error');
+    input.value = '';
+    return;
+  }
+  hwPendingPdfFile = file;
+  hwExistingPdfNotesUrl = '';
+  const box = document.getElementById('hwPdfPreviewBox');
+  if (box) {
+    box.style.display = 'block';
+    box.innerHTML = `
+      <div style="display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 10px;">
+        <i class="fas fa-file-pdf" style="color: #dc2626;"></i>
+        <span style="font-size: 0.85rem; color: #334155;">${escapeHwHtml(file.name)}</span>
+        <button type="button" class="btn-secondary" style="padding: 4px 8px; color: #dc2626;" onclick="clearHomeworkPdf()"><i class="fas fa-times"></i></button>
+      </div>
+    `;
+  }
+}
+
+function clearHomeworkPdf() {
+  hwPendingPdfFile = null;
+  hwExistingPdfNotesUrl = '';
+  const inp = document.getElementById('hwPdfInput');
+  const box = document.getElementById('hwPdfPreviewBox');
+  if (inp) inp.value = '';
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function resetHomeworkForm() {
+  setHomeworkItemValues(['']);
+  const videoEl = document.getElementById('hwVideoLink');
+  const noteEl = document.getElementById('hwTeacherNote');
+  const typeEl = document.getElementById('hwTypeSelect');
+  if (videoEl) videoEl.value = '';
+  if (noteEl) noteEl.value = '';
+  if (typeEl) typeEl.value = 'Writing';
+  clearHomeworkImage();
+  clearHomeworkPdf();
 }
 
 function editHomeworkItem(id) {
@@ -193,16 +357,39 @@ function editHomeworkItem(id) {
   const classEl = document.getElementById('hwClassSelect');
   const subjEl = document.getElementById('hwSubjectSelect');
   const typeEl = document.getElementById('hwTypeSelect');
-  const descEl = document.getElementById('hwDescription');
+  const videoEl = document.getElementById('hwVideoLink');
+  const noteEl = document.getElementById('hwTeacherNote');
 
   if (dateEl) dateEl.value = item.date;
   if (classEl) classEl.value = item.className;
   if (subjEl) subjEl.value = item.subject;
   if (typeEl) typeEl.value = item.homeworkType || 'Writing';
-  if (descEl) {
-    descEl.value = item.description;
-    descEl.focus();
+  if (videoEl) videoEl.value = item.videoLink || '';
+  if (noteEl) noteEl.value = item.teacherNote || '';
+
+  const lines = String(item.description || '').split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+  setHomeworkItemValues(lines);
+
+  clearHomeworkImage();
+  clearHomeworkPdf();
+  hwExistingAttachmentUrl = item.attachmentUrl || '';
+  hwExistingPdfNotesUrl = item.pdfNotesUrl || '';
+
+  if (hwExistingAttachmentUrl) {
+    const box = document.getElementById('hwImagePreviewBox');
+    if (box) {
+      box.style.display = 'block';
+      box.innerHTML = `<div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #cbd5e1;padding:6px 10px;border-radius:8px;"><a href="${escapeHwHtml(hwExistingAttachmentUrl)}" target="_blank">Existing Image Attachment</a><button type="button" class="btn-secondary" style="padding:2px 6px;color:#dc2626;" onclick="clearHomeworkImage()"><i class="fas fa-times"></i></button></div>`;
+    }
   }
+  if (hwExistingPdfNotesUrl) {
+    const box = document.getElementById('hwPdfPreviewBox');
+    if (box) {
+      box.style.display = 'block';
+      box.innerHTML = `<div style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #cbd5e1;padding:6px 10px;border-radius:8px;"><a href="${escapeHwHtml(hwExistingPdfNotesUrl)}" target="_blank">Existing PDF Notes</a><button type="button" class="btn-secondary" style="padding:2px 6px;color:#dc2626;" onclick="clearHomeworkPdf()"><i class="fas fa-times"></i></button></div>`;
+    }
+  }
+
   showStatus(`Loaded ${item.className} - ${item.subject} for editing`, 'info');
 }
 
@@ -211,11 +398,13 @@ async function saveTeacherHomework() {
   const className = (document.getElementById('hwClassSelect') || {}).value || '';
   const subject = (document.getElementById('hwSubjectSelect') || {}).value || '';
   const homeworkType = (document.getElementById('hwTypeSelect') || {}).value || 'Writing';
-  const description = ((document.getElementById('hwDescription') || {}).value || '').trim();
+  const description = getCombinedHomeworkDescription();
+  const videoLink = ((document.getElementById('hwVideoLink') || {}).value || '').trim();
+  const teacherNote = ((document.getElementById('hwTeacherNote') || {}).value || '').trim();
   const btn = document.getElementById('hwSaveBtn');
 
   if (!className || !subject || !description) {
-    showStatus('Please select Class, Subject, and enter the Homework details.', 'error');
+    showStatus('Please select Class, Subject, and enter at least one Homework item.', 'error');
     return;
   }
 
@@ -225,12 +414,43 @@ async function saveTeacherHomework() {
   }
 
   try {
-    const res = await apiCall('/api/homework/save', 'POST', { date, className, subject, homeworkType, description });
+    let attachmentUrl = hwExistingAttachmentUrl;
+    if (hwPendingImageFile) {
+      const base64Data = await fileToBase64(hwPendingImageFile);
+      const upRes = await apiCall('/api/homework/upload', 'POST', {
+        fileName: hwPendingImageFile.name,
+        contentType: hwPendingImageFile.type || 'image/jpeg',
+        base64Data
+      });
+      if (!upRes || upRes.status !== 'success') {
+        showStatus((upRes && upRes.message) || 'Image upload failed.', 'error');
+        return;
+      }
+      attachmentUrl = upRes.url;
+    }
+
+    let pdfNotesUrl = hwExistingPdfNotesUrl;
+    if (hwPendingPdfFile) {
+      const base64Data = await fileToBase64(hwPendingPdfFile);
+      const upRes = await apiCall('/api/homework/upload', 'POST', {
+        fileName: hwPendingPdfFile.name,
+        contentType: 'application/pdf',
+        base64Data
+      });
+      if (!upRes || upRes.status !== 'success') {
+        showStatus((upRes && upRes.message) || 'PDF upload failed.', 'error');
+        return;
+      }
+      pdfNotesUrl = upRes.url;
+    }
+
+    const res = await apiCall('/api/homework/save', 'POST', {
+      date, className, subject, homeworkType, description, videoLink, teacherNote, attachmentUrl, pdfNotesUrl
+    });
 
     if (res && res.status === 'success') {
       showStatus(res.message || 'Homework saved!', 'success');
-      const descEl = document.getElementById('hwDescription');
-      if (descEl) descEl.value = '';
+      resetHomeworkForm();
       await loadMyHomeworkList();
       if (hwProfile && hwProfile.isClassTeacher) {
         await loadConsolidatedHomework();
