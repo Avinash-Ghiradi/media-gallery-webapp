@@ -773,6 +773,7 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
 
   let timetableRows = [];
   let hwItems = [];
+  let sentLogs = [];
   let source = 'fallback';
 
   if (config.gasWebAppUrl) {
@@ -781,6 +782,7 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
       source = 'google-sheet';
       hwItems = (gasBundle.homework || []).map(x => ({ ...x, date: normalizeDateStr(x.date) }));
       timetableRows = gasBundle.timetable || [];
+      sentLogs = (gasBundle.sentLogs || []).map(s => ({ ...s, date: normalizeDateStr(s.date) }));
     }
   }
 
@@ -788,7 +790,12 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
     const res = await readAllHomework();
     source = res.source;
     hwItems = res.items || [];
+    sentLogs = (readFallbackData().sentLogs || []).map(s => ({ ...s, date: normalizeDateStr(s.date) }));
   }
+
+  const sentInfo = sentLogs.find(
+    s => s.date === targetDate && s.className.toLowerCase() === selectedClass.toLowerCase()
+  ) || null;
 
   const classItems = hwItems.filter(
     x => x.date === targetDate && x.className.toLowerCase() === selectedClass.toLowerCase()
@@ -918,7 +925,9 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
     formattedMessage,
     whatsappGroup: group,
     groupInviteUrl: isInviteLink ? rawTarget : '',
-    whatsappLink
+    whatsappLink,
+    alreadySent: !!sentInfo,
+    sentInfo
   };
 }
 
