@@ -165,6 +165,7 @@ async function loadMyHomeworkList() {
           <div>
             <span class="assigned-class-badge">${escapeHwHtml(item.className)}</span>
             <strong style="margin-left: 6px; color: #0f172a;">${escapeHwHtml(item.subject)}</strong>
+            <span class="assigned-class-badge" style="background: rgba(79,70,229,0.1); color: #4338ca; margin-left: 6px;">${escapeHwHtml(item.homeworkType || 'Writing')}</span>
             <span style="font-size: 0.8rem; color: #64748b; margin-left: 8px;">by ${escapeHwHtml(item.teacherName)}</span>
           </div>
           <div style="display: flex; gap: 6px;">
@@ -191,11 +192,13 @@ function editHomeworkItem(id) {
   const dateEl = document.getElementById('hwDate');
   const classEl = document.getElementById('hwClassSelect');
   const subjEl = document.getElementById('hwSubjectSelect');
+  const typeEl = document.getElementById('hwTypeSelect');
   const descEl = document.getElementById('hwDescription');
 
   if (dateEl) dateEl.value = item.date;
   if (classEl) classEl.value = item.className;
   if (subjEl) subjEl.value = item.subject;
+  if (typeEl) typeEl.value = item.homeworkType || 'Writing';
   if (descEl) {
     descEl.value = item.description;
     descEl.focus();
@@ -207,6 +210,7 @@ async function saveTeacherHomework() {
   const date = (document.getElementById('hwDate') || {}).value || getTodayIsoDate();
   const className = (document.getElementById('hwClassSelect') || {}).value || '';
   const subject = (document.getElementById('hwSubjectSelect') || {}).value || '';
+  const homeworkType = (document.getElementById('hwTypeSelect') || {}).value || 'Writing';
   const description = ((document.getElementById('hwDescription') || {}).value || '').trim();
   const btn = document.getElementById('hwSaveBtn');
 
@@ -221,7 +225,7 @@ async function saveTeacherHomework() {
   }
 
   try {
-    const res = await apiCall('/api/homework/save', 'POST', { date, className, subject, description });
+    const res = await apiCall('/api/homework/save', 'POST', { date, className, subject, homeworkType, description });
 
     if (res && res.status === 'success') {
       showStatus(res.message || 'Homework saved!', 'success');
@@ -318,12 +322,49 @@ async function loadConsolidatedHomework() {
       if (res.whatsappGroup) {
         groupInfoEl.innerHTML = `<i class="fab fa-whatsapp" style="color: #16a34a;"></i> Target Group: <strong>${escapeHwHtml(res.whatsappGroup.name || res.className)}</strong>`;
       } else {
-        groupInfoEl.innerHTML = `<i class="fas fa-info-circle" style="color: #64748b;"></i> No WhatsApp group linked for ${escapeHwHtml(res.className)} in WhatsAppGroups sheet (WhatsApp share will still open with message).`;
+        groupInfoEl.innerHTML = `<i class="fas fa-info-circle" style="color: #64748b;"></i> Click "Send to WhatsApp Group" to open WhatsApp with the message pre-filled, then select your ${escapeHwHtml(res.className)} group.`;
       }
+    }
+
+    const openGroupBtn = document.getElementById('hwOpenGroupBtn');
+    if (openGroupBtn) {
+      openGroupBtn.style.display = res.groupInviteUrl ? 'inline-flex' : 'none';
     }
   } catch (err) {
     console.error('loadConsolidatedHomework error:', err);
     previewEl.value = 'Error loading consolidated homework.';
+  }
+}
+
+async function generateConsolidatedPdf() {
+  const date = (document.getElementById('hwCtDate') || {}).value || getTodayIsoDate();
+  const className = (document.getElementById('hwCtClassSelect') || {}).value || '';
+  const previewEl = document.getElementById('hwConsolidatedPreview');
+  const btn = document.getElementById('hwGeneratePdfBtn');
+  if (!className) return showStatus('Please select a class first.', 'error');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+  }
+
+  try {
+    const res = await apiCall('/api/homework/pdf', 'POST', { date, className });
+    if (res && res.status === 'success') {
+      hwConsolidatedData = res;
+      if (previewEl) previewEl.value = res.formattedMessage || '';
+      showStatus('PDF generated in Google Drive and attached to WhatsApp message!', 'success');
+    } else {
+      showStatus((res && res.message) || 'Failed to generate PDF.', 'error');
+    }
+  } catch (err) {
+    console.error('generateConsolidatedPdf error:', err);
+    showStatus('Error generating PDF.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-file-pdf"></i> Generate PDF &amp; Attach Link';
+    }
   }
 }
 
@@ -347,24 +388,25 @@ function sendConsolidatedToWhatsApp() {
   const text = previewEl ? previewEl.value.trim() : '';
   if (!text) return showStatus('No consolidated homework message to send.', 'error');
 
-  // Copy to clipboard so if a WhatsApp group invite link opens, teacher can paste right away
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).catch(() => {});
   }
 
-  if (hwConsolidatedData && hwConsolidatedData.groupInviteUrl) {
-    showStatus('Message copied! Opening your class WhatsApp group — paste and send.', 'success');
-    window.open(hwConsolidatedData.groupInviteUrl, '_blank', 'noopener,noreferrer');
-    return;
-  }
-
-  const phoneDigits = hwConsolidatedData && hwConsolidatedData.whatsappGroup && hwConsolidatedData.whatsappGroup.phoneOrLink
-    ? String(hwConsolidatedData.whatsappGroup.phoneOrLink).replace(/\D/g, '')
+  const rawTarget = hwConsolidatedData && hwConsolidatedData.whatsappGroup && hwConsolidatedData.whatsappGroup.phoneOrLink
+    ? String(hwConsolidatedData.whatsappGroup.phoneOrLink).trim()
     : '';
+  const isInviteLink = /^https?:\/\//i.test(rawTarget);
+  const phoneDigits = !isInviteLink ? rawTarget.replace(/\D/g, '') : '';
 
   const waUrl = phoneDigits
     ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`
-    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 
   window.open(waUrl, '_blank', 'noopener,noreferrer');
+}
+
+function openHomeworkGroupLink() {
+  if (hwConsolidatedData && hwConsolidatedData.groupInviteUrl) {
+    window.open(hwConsolidatedData.groupInviteUrl, '_blank', 'noopener,noreferrer');
+  }
 }
