@@ -135,6 +135,10 @@
         <i class="fab fa-whatsapp"></i>
         <span>WhatsApp</span>
       </button>
+      <button class="tab-button" onclick="switchTab('homework')">
+        <i class="fas fa-book-open"></i>
+        <span>Homework</span>
+      </button>
       <button class="tab-button" onclick="switchTab('delete')">
         <i class="fas fa-trash-alt"></i>
         <span>Manage</span>
@@ -608,6 +612,119 @@
           </div>
         </div>
       </div>
+
+      <!-- Homework Tab -->
+      <div id="homeworkTab" class="tab-content">
+        <div class="content">
+          <div class="page-heading">
+            <h1><i class="fas fa-book-open"></i> Daily Homework</h1>
+            <p class="page-subtitle">Add homework for your assigned classes &amp; subjects, or send consolidated class homework to WhatsApp</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-id-badge"></i> Teacher Profile &amp; Assigned Classes / Subjects</div>
+            <div id="hwTeacherProfileBox">
+              <div class="loading-recent">
+                <div class="spinner"></div>
+                <p>Loading your classes &amp; subjects...</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-plus-circle"></i> Add / Update Subject Homework</div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwDate">Date</label>
+                  <input type="date" id="hwDate" onchange="loadMyHomeworkList()">
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwClassSelect">Your Class</label>
+                  <div class="input-wrapper">
+                    <select id="hwClassSelect">
+                      <option value="">-- Select Class --</option>
+                    </select>
+                    <div class="input-icon"><i class="fas fa-chevron-down"></i></div>
+                  </div>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwSubjectSelect">Your Subject</label>
+                  <div class="input-wrapper">
+                    <select id="hwSubjectSelect">
+                      <option value="">-- Select Subject --</option>
+                    </select>
+                    <div class="input-icon"><i class="fas fa-chevron-down"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="hwDescription">Homework Details</label>
+              <textarea id="hwDescription" rows="3" placeholder="Enter today's homework for this class and subject..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button type="button" class="btn-primary" id="hwSaveBtn" onclick="saveTeacherHomework()">
+                <i class="fas fa-save"></i> Save Homework
+              </button>
+              <button type="button" class="btn-secondary" onclick="loadMyHomeworkList()">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-list-check"></i> Submitted Homework for Selected Date</div>
+            <div id="hwMyListContainer">
+              <p style="color: #64748b;">Select a date to view submitted homework.</p>
+            </div>
+          </div>
+
+          <div class="card" id="hwClassTeacherCard" style="display: none; border: 2px solid rgba(34, 197, 94, 0.35);">
+            <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span><i class="fab fa-whatsapp" style="color: #16a34a;"></i> Class Teacher: Consolidated Homework (One Message)</span>
+              <span id="hwCtSubjectCount" class="assigned-class-badge" style="background: rgba(34,197,94,0.12); color: #15803d;">0 subjects submitted</span>
+            </div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwCtDate">Date</label>
+                  <input type="date" id="hwCtDate" onchange="loadConsolidatedHomework()">
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwCtClassSelect">Class (Class Teacher)</label>
+                  <div class="input-wrapper">
+                    <select id="hwCtClassSelect" onchange="loadConsolidatedHomework()"></select>
+                    <div class="input-icon"><i class="fas fa-chevron-down"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="hwCtGroupInfo" style="margin-bottom: 10px; font-size: 0.9rem;"></div>
+            <div class="form-group">
+              <label for="hwConsolidatedPreview">Consolidated WhatsApp Message (All Subjects)</label>
+              <textarea id="hwConsolidatedPreview" rows="10" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.92rem; background: #f8fafc;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button type="button" class="btn-primary" style="background: linear-gradient(135deg, #16a34a, #15803d);" onclick="sendConsolidatedToWhatsApp()">
+                <i class="fab fa-whatsapp"></i> Send to WhatsApp Group
+              </button>
+              <button type="button" class="btn-secondary" onclick="copyConsolidatedHomework()">
+                <i class="fas fa-copy"></i> Copy Consolidated Message
+              </button>
+              <button type="button" class="btn-secondary" onclick="loadConsolidatedHomework()">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -797,5 +914,6 @@
   </div>
 
   <script src="/js/app.js"></script>
+  <script src="/js/homework.js"></script>
 </body>
 </html>
