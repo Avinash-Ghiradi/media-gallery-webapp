@@ -8,6 +8,8 @@ const SCHOOL_NAME = 'Success School Indi';
 const FALLBACK_FILE = path.join(__dirname, '..', 'homework_data.json');
 
 let sheetsClient = null;
+let ensureSheetsPromise = null;
+let sheetsEnsured = false;
 
 function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
@@ -140,9 +142,93 @@ function mapRowsByHeaders(rows) {
   return { headers, items };
 }
 
+async function ensureHomeworkSheets() {
+  if (sheetsEnsured) return true;
+  if (ensureSheetsPromise) return ensureSheetsPromise;
+
+  ensureSheetsPromise = (async () => {
+    const sheets = getSheetsClient();
+    if (!sheets || !config.homeworkSheetId) return false;
+    try {
+      const ss = await sheets.spreadsheets.get({ spreadsheetId: config.homeworkSheetId });
+      const existingTitles = new Set((ss.data.sheets || []).map(s => s.properties.title));
+      const requiredTabs = ['Teachers', 'Classes', 'Subjects', 'WhatsAppGroups', 'Homework'];
+      const missingTabs = requiredTabs.filter(t => !existingTitles.has(t));
+
+      if (missingTabs.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: config.homeworkSheetId,
+          requestBody: {
+            requests: missingTabs.map(title => ({ addSheet: { properties: { title } } }))
+          }
+        });
+        console.log('Created homework tabs in Media Gallery Google Sheet:', missingTabs.join(', '));
+      }
+
+      const fallback = readFallbackData();
+      const seedSpecs = [
+        {
+          tab: 'Teachers',
+          headers: ['Teacher ID', 'Name', 'Phone', 'Classes', 'Subjects', 'IsClassTeacher'],
+          rows: fallback.teachers.map(t => [t.id, t.name, t.phone, t.classes, t.subjects, t.isClassTeacher])
+        },
+        {
+          tab: 'Classes',
+          headers: ['Class ID', 'Class Name', 'ClassTeacher'],
+          rows: fallback.classes.map(c => [c.id, c.name, c.classTeacher])
+        },
+        {
+          tab: 'Subjects',
+          headers: ['Subject ID', 'Subject Name'],
+          rows: fallback.subjects.map((s, idx) => [`SUB${idx + 1}`, s])
+        },
+        {
+          tab: 'WhatsAppGroups',
+          headers: ['Group ID', 'Group Name', 'Class', 'PhoneOrGroupLink', 'IsActive'],
+          rows: fallback.classes.map((c, idx) => [`G${idx + 1}`, `${c.name} Parents`, c.name, '', 'YES'])
+        },
+        {
+          tab: 'Homework',
+          headers: ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt'],
+          rows: []
+        }
+      ];
+
+      for (const spec of seedSpecs) {
+        const existing = await sheets.spreadsheets.values.get({
+          spreadsheetId: config.homeworkSheetId,
+          range: `${spec.tab}!A1:Z2`
+        });
+        const values = existing.data.values || [];
+        if (values.length === 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: config.homeworkSheetId,
+            range: `${spec.tab}!A1`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [spec.headers, ...spec.rows] }
+          });
+        }
+      }
+
+      sheetsEnsured = true;
+      return true;
+    } catch (err) {
+      console.warn('ensureHomeworkSheets failed:', err.message);
+      return false;
+    } finally {
+      ensureSheetsPromise = null;
+    }
+  })();
+
+  return ensureSheetsPromise;
+}
+
 async function readSheetTab(tabName) {
   const sheets = getSheetsClient();
   if (!sheets || !config.homeworkSheetId) return null;
+  if (!sheetsEnsured) {
+    await ensureHomeworkSheets();
+  }
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: config.homeworkSheetId,
@@ -570,6 +656,7 @@ async function getConsolidatedHomework(sessionUser, date, className) {
 }
 
 module.exports = {
+  ensureHomeworkSheets,
   resolveTeacherProfile,
   listHomework,
   saveHomework,
