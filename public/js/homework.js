@@ -217,11 +217,7 @@ async function saveTeacherHomework() {
   }
 
   try {
-    const res = await apiCall('/api/homework/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, className, subject, description })
-    });
+    const res = await apiCall('/api/homework/save', 'POST', { date, className, subject, description });
 
     if (res && res.status === 'success') {
       showStatus(res.message || 'Homework saved!', 'success');
@@ -248,7 +244,7 @@ async function saveTeacherHomework() {
 async function deleteHomeworkItem(id) {
   if (!confirm('Delete this homework entry?')) return;
   try {
-    const res = await apiCall(`/api/homework/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const res = await apiCall(`/api/homework/${encodeURIComponent(id)}`, 'DELETE');
     if (res && res.status === 'success') {
       showStatus(res.message || 'Homework deleted.', 'success');
       await loadMyHomeworkList();
