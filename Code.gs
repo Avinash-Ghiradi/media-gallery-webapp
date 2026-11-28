@@ -499,7 +499,7 @@ function saveFileToDriveFolder(targetFolder, fileData) {
 
   var existingFiles = targetFolder.getFilesByName(filename);
   if (existingFiles.hasNext()) {
-    var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+    var timestamp = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyyMMdd-HHmmss');
     var ext = filename.split('.').pop();
     var baseName = filename.substring(0, filename.lastIndexOf('.'));
     filename = baseName + '_' + timestamp + '.' + ext;
@@ -1314,7 +1314,7 @@ function getAllEventsFromSheet2ForDeletion() {
 function formatDate(date) {
   if (!date) return 'Unknown date';
   try {
-    return Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    return Utilities.formatDate(date, 'Asia/Kolkata', 'dd/MM/yyyy');
   } catch (e) {
     return date.toString();
   }
@@ -1801,7 +1801,7 @@ function getFolderInfoForWhatsApp(eventName, className) {
  */
 function generateWhatsAppMessage(eventName, className, folderUrl, fileCount) {
   if (fileCount === undefined) fileCount = 0;
-  var date = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'd MMMM yyyy');
+  var date = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'd MMMM yyyy');
   
   var cleanUrl = folderUrl;
   if (folderUrl.includes('drive.google.com/drive/folders/')) {
@@ -1848,7 +1848,7 @@ var HW_DEFAULT_CLASSES = [
 function formatHwDateValue(val) {
   if (val === null || val === undefined || val === '') return '';
   if (Object.prototype.toString.call(val) === '[object Date]' && !isNaN(val.getTime())) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return Utilities.formatDate(val, 'Asia/Kolkata', 'yyyy-MM-dd');
   }
   var s = val.toString().trim().replace(/^'/, '');
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
@@ -1885,6 +1885,7 @@ function ensureHomeworkSheetsGAS() {
     ]);
   }
   hwSheet.getRange('B:B').setNumberFormat('@');
+  hwSheet.getRange('H:H').setNumberFormat('@');
   return { ss: ss, wgSheet: wgSheet, hwSheet: hwSheet };
 }
 
@@ -1936,7 +1937,9 @@ function getHomeworkBundle() {
         teacherName: hr[4] ? hr[4].toString().trim() : '',
         teacherPhone: hr[5] ? hr[5].toString().trim() : '',
         description: hr[6] ? hr[6].toString().trim() : '',
-        updatedAt: hr[7] ? hr[7].toString().trim() : ''
+        updatedAt: (Object.prototype.toString.call(hr[7]) === '[object Date]' && !isNaN(hr[7].getTime()))
+          ? Utilities.formatDate(hr[7], 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss')
+          : (hr[7] ? hr[7].toString().trim() : '')
       });
     }
 
