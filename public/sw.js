@@ -1,9 +1,10 @@
-const CACHE_NAME = 'media-gallery-v23';
+const CACHE_NAME = 'media-gallery-v22';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/css/styles.css',
-  '/js/app.js'
+  '/js/app.js',
+  '/js/academic.js'
 ];
 
 const IDB_NAME = 'SuccessGalleryUploadDB';
