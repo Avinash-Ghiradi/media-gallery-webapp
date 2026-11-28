@@ -457,6 +457,15 @@ app.get('/api/homework/consolidated', auth.requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/homework/pdf', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await homeworkService.generateHomeworkPdf(req.session.user, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 /* ==========================================================================
    MANAGE & DELETE ROUTES (Protected)
    ========================================================================== */
