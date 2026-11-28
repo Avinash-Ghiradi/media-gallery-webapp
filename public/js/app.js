@@ -101,7 +101,42 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Tab switching
+let lastGalleryTab = 'upload';
+
+function switchAppSection(section) {
+  const galBtn = document.getElementById('sectionBtnGallery');
+  const hwBtn = document.getElementById('sectionBtnHomework');
+  const subNav = document.getElementById('gallerySubNav');
+
+  if (section === 'homework') {
+    if (galBtn) galBtn.classList.remove('active');
+    if (hwBtn) hwBtn.classList.add('active');
+    if (subNav) subNav.style.display = 'none';
+    switchTab('homework');
+  } else {
+    if (hwBtn) hwBtn.classList.remove('active');
+    if (galBtn) galBtn.classList.add('active');
+    if (subNav) subNav.style.display = '';
+    switchTab(lastGalleryTab || 'upload');
+  }
+}
+
 function switchTab(tabName) {
+  const galBtn = document.getElementById('sectionBtnGallery');
+  const hwBtn = document.getElementById('sectionBtnHomework');
+  const subNav = document.getElementById('gallerySubNav');
+
+  if (tabName === 'homework') {
+    if (galBtn) galBtn.classList.remove('active');
+    if (hwBtn) hwBtn.classList.add('active');
+    if (subNav) subNav.style.display = 'none';
+  } else {
+    lastGalleryTab = tabName;
+    if (hwBtn) hwBtn.classList.remove('active');
+    if (galBtn) galBtn.classList.add('active');
+    if (subNav) subNav.style.display = '';
+  }
+
   document.querySelectorAll('.tab-button').forEach(button => {
     button.classList.remove('active');
   });
