@@ -762,6 +762,26 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
   const tomorrowPeriods = ttMatch ? (ttMatch.periods || []) : [];
 
   const friendlyDate = formatDateWithWeekday(targetDate);
+
+  // Auto-generate PDF in Google Drive immediately when homework items exist
+  let finalPdfUrl = pdfUrl;
+  let pdfFileName = '';
+  if (!finalPdfUrl && classItems.length > 0 && config.gasWebAppUrl) {
+    const pdfRes = await callGasBridge('generateHomeworkPdf', {
+      date: targetDate,
+      friendlyDate,
+      className: selectedClass,
+      classTeacher: profile.teacherName,
+      items: classItems,
+      tomorrowPeriods,
+      tomorrowDayLabel: tomorrowDayName ? `Tomorrow's Timetable (${tomorrowDayName})` : "Tomorrow's Timetable"
+    });
+    if (pdfRes && pdfRes.status === 'success' && pdfRes.pdfUrl) {
+      finalPdfUrl = pdfRes.pdfUrl;
+      pdfFileName = pdfRes.fileName || '';
+    }
+  }
+
   const bar = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
   const lines = [
     `*${SCHOOL_NAME.toUpperCase()}*`,
@@ -812,9 +832,9 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
   lines.push('📱 *Thank you*');
   lines.push('──────────────────────────────────────────────────');
 
-  if (pdfUrl) {
+  if (finalPdfUrl) {
     lines.push('');
-    lines.push(`📎 *PDF Attachment:* ${pdfUrl}`);
+    lines.push(`📎 *PDF Attachment:* ${finalPdfUrl}`);
   }
 
   const formattedMessage = lines.join('\n').trim();
@@ -829,7 +849,7 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
 
   const whatsappLink = phoneDigits
     ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(formattedMessage)}`
-    : `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMessage)}`;
+    : `https://wa.me/?text=${encodeURIComponent(formattedMessage)}`;
 
   return {
     status: 'success',
@@ -840,7 +860,8 @@ async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = ''
     items: classItems,
     tomorrowPeriods,
     tomorrowDayLabel: tomorrowDayName ? `Tomorrow's Timetable (${tomorrowDayName})` : "Tomorrow's Timetable",
-    pdfUrl,
+    pdfUrl: finalPdfUrl,
+    pdfFileName,
     formattedMessage,
     whatsappGroup: group,
     groupInviteUrl: isInviteLink ? rawTarget : '',
