@@ -1014,6 +1014,145 @@ async function getHomeworkHistory(sessionUser, filters = {}) {
   return { status: 'success', source, items: filtered };
 }
 
+async function markHomeworkSent(sessionUser, payload) {
+  const profile = await resolveTeacherProfile(sessionUser);
+  const date = normalizeDateStr((payload && payload.date) || todayIso());
+  const className = ((payload && payload.className) || '').trim();
+  if (!className) return { status: 'error', message: 'Class is required.' };
+
+  const sentAt = nowIstString();
+  const entry = {
+    date,
+    className,
+    classTeacher: profile.teacherName,
+    sentAt,
+    subjectsCount: Number((payload && payload.subjectsCount) || 0),
+    pdfUrl: ((payload && payload.pdfUrl) || '').trim()
+  };
+
+  if (config.gasWebAppUrl) {
+    const gasRes = await callGasBridge('markHomeworkSent', entry);
+    if (gasRes && gasRes.status === 'success') {
+      return { status: 'success', entry };
+    }
+  }
+
+  const fallback = readFallbackData();
+  fallback.sentLogs = fallback.sentLogs || [];
+  const idx = fallback.sentLogs.findIndex(
+    s => s.date === date && s.className.toLowerCase() === className.toLowerCase()
+  );
+  if (idx >= 0) fallback.sentLogs[idx] = entry;
+  else fallback.sentLogs.push(entry);
+  writeFallbackData(fallback);
+  return { status: 'success', entry };
+}
+
+async function getDailyTrafficLights(sessionUser, date) {
+  const targetDate = normalizeDateStr(date || todayIso());
+  const meta = await loadMetadata();
+
+  let hwItems = [];
+  let sentLogs = [];
+  if (config.gasWebAppUrl) {
+    const gasBundle = await callGasBridge('getHomeworkBundle');
+    if (gasBundle && gasBundle.status === 'success') {
+      hwItems = (gasBundle.homework || []).map(x => ({ ...x, date: normalizeDateStr(x.date) }));
+      sentLogs = (gasBundle.sentLogs || []).map(s => ({ ...s, date: normalizeDateStr(s.date) }));
+    }
+  } else {
+    const res = await readAllHomework();
+    hwItems = res.items || [];
+    sentLogs = (readFallbackData().sentLogs || []).map(s => ({ ...s, date: normalizeDateStr(s.date) }));
+  }
+
+  const dayHw = hwItems.filter(x => x.date === targetDate);
+  const daySent = sentLogs.filter(s => s.date === targetDate);
+
+  // Build teacher-wise lights
+  const teachersWithAssignments = meta.usersList.filter(u => splitCsv(u.classes).length > 0 && splitCsv(u.subjects).length > 0);
+  const teacherLights = teachersWithAssignments.map(u => {
+    const tClasses = splitCsv(u.classes);
+    const tSubjects = splitCsv(u.subjects);
+    const tName = u.fullName || u.username;
+    const expectedCount = tClasses.length * tSubjects.length;
+
+    const submitted = dayHw.filter(hw =>
+      (hw.teacherName && normalizeName(hw.teacherName) === normalizeName(tName)) ||
+      (hw.teacherPhone && u.username && normalizePhone(hw.teacherPhone) === normalizePhone(u.username))
+    );
+
+    let light = 'red';
+    if (submitted.length >= expectedCount && expectedCount > 0) {
+      light = 'green';
+    } else if (submitted.length > 0) {
+      light = 'yellow';
+    }
+
+    return {
+      teacherName: tName,
+      phone: u.username,
+      classTeacherOf: u.classTeacher || '',
+      expectedCount,
+      submittedCount: submitted.length,
+      submittedDetails: submitted.map(s => `${s.className} (${s.subject})`),
+      light
+    };
+  });
+
+  // Build class-wise lights (including Class Teacher WhatsApp sent status)
+  const classLights = meta.allClasses.map(cls => {
+    const ctUser = meta.usersList.find(u =>
+      splitCsv(u.classTeacher).some(c => c.toLowerCase() === cls.toLowerCase())
+    );
+    const expectedTeachers = teachersWithAssignments.filter(u =>
+      splitCsv(u.classes).some(c => c.toLowerCase() === cls.toLowerCase())
+    );
+    const classHw = dayHw.filter(hw => hw.className.toLowerCase() === cls.toLowerCase());
+    const sentInfo = daySent.find(s => s.className.toLowerCase() === cls.toLowerCase()) || null;
+
+    const submittedTeachers = expectedTeachers.filter(u => {
+      const tName = u.fullName || u.username;
+      return classHw.some(hw =>
+        (hw.teacherName && normalizeName(hw.teacherName) === normalizeName(tName)) ||
+        (hw.teacherPhone && u.username && normalizePhone(hw.teacherPhone) === normalizePhone(u.username))
+      );
+    });
+
+    const pendingTeachers = expectedTeachers
+      .filter(u => !submittedTeachers.includes(u))
+      .map(u => u.fullName || u.username);
+
+    let light = 'red';
+    if (classHw.length === 0) {
+      light = 'red';
+    } else if (pendingTeachers.length === 0 && sentInfo) {
+      light = 'green';
+    } else {
+      light = 'yellow';
+    }
+
+    return {
+      className: cls,
+      classTeacher: ctUser ? (ctUser.fullName || ctUser.username) : 'Not Assigned',
+      submittedCount: classHw.length,
+      expectedTeachersCount: expectedTeachers.length,
+      submittedTeachersCount: submittedTeachers.length,
+      pendingTeachers,
+      sentInfo,
+      light
+    };
+  });
+
+  return {
+    status: 'success',
+    date: targetDate,
+    friendlyDate: formatDateWithWeekday(targetDate),
+    teacherLights,
+    classLights
+  };
+}
+
 module.exports = {
   ensureHomeworkSheets,
   resolveTeacherProfile,
@@ -1023,5 +1162,7 @@ module.exports = {
   deleteHomework,
   getConsolidatedHomework,
   generateHomeworkPdf,
-  uploadHomeworkAttachment
+  uploadHomeworkAttachment,
+  markHomeworkSent,
+  getDailyTrafficLights
 };
