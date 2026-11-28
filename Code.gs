@@ -111,6 +111,8 @@ function doPost(e) {
       res = saveHomeworkInSheet(contents.record || contents);
     } else if (action === 'deleteHomeworkInSheet') {
       res = deleteHomeworkInSheet(contents.id);
+    } else if (action === 'generateHomeworkPdf') {
+      res = generateHomeworkPdfInDrive(contents);
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -1880,8 +1882,8 @@ function ensureHomeworkSheetsGAS() {
     hwSheet = ss.insertSheet('Homework');
   }
   if (hwSheet.getLastRow() === 0) {
-    hwSheet.getRange(1, 1, 1, 8).setValues([
-      ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt']
+    hwSheet.getRange(1, 1, 1, 9).setValues([
+      ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType']
     ]);
   }
   hwSheet.getRange('B:B').setNumberFormat('@');
@@ -1939,8 +1941,29 @@ function getHomeworkBundle() {
         description: hr[6] ? hr[6].toString().trim() : '',
         updatedAt: (Object.prototype.toString.call(hr[7]) === '[object Date]' && !isNaN(hr[7].getTime()))
           ? Utilities.formatDate(hr[7], 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss')
-          : (hr[7] ? hr[7].toString().trim() : '')
+          : (hr[7] ? hr[7].toString().trim() : ''),
+        homeworkType: hr[8] ? hr[8].toString().trim() : 'Writing'
       });
+    }
+
+    var timetable = [];
+    var ttSheet = sheetsObj.ss.getSheetByName('TimeTable');
+    if (ttSheet && ttSheet.getLastRow() > 1) {
+      var ttData = ttSheet.getDataRange().getValues();
+      for (var t = 1; t < ttData.length; t++) {
+        var tr = ttData[t];
+        if (!tr[0] && !tr[1]) continue;
+        var periods = [];
+        for (var p = 2; p < tr.length; p++) {
+          var pv = tr[p] ? tr[p].toString().trim() : '';
+          if (pv) periods.push(pv);
+        }
+        timetable.push({
+          className: tr[0] ? tr[0].toString().trim() : '',
+          day: tr[1] ? tr[1].toString().trim() : '',
+          periods: periods
+        });
+      }
     }
 
     return {
@@ -1948,7 +1971,8 @@ function getHomeworkBundle() {
       source: 'google-sheet',
       usersList: usersList,
       groups: groups,
-      homework: homework
+      homework: homework,
+      timetable: timetable
     };
   } catch (err) {
     return { status: 'error', message: err.message };
@@ -1984,7 +2008,8 @@ function saveHomeworkInSheet(record) {
         r[4] ? r[4].toString().trim() : '',
         r[5] ? r[5].toString().trim() : '',
         r[6] ? r[6].toString().trim() : '',
-        r[7] ? r[7].toString().trim() : ''
+        r[7] ? r[7].toString().trim() : '',
+        r[8] ? r[8].toString().trim() : 'Writing'
       ]);
     }
 
@@ -1997,7 +2022,8 @@ function saveHomeworkInSheet(record) {
       record.teacherName || '',
       record.teacherPhone || '',
       record.description || '',
-      record.updatedAt || ''
+      record.updatedAt || '',
+      record.homeworkType || 'Writing'
     ]);
 
     // Sort datewise (newest date first, then Class, then Subject)
@@ -2008,11 +2034,12 @@ function saveHomeworkInSheet(record) {
       return a[3].localeCompare(b[3]);
     });
 
-    var header = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt'];
+    var header = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType'];
     var allRows = [header].concat(items);
     hwSheet.clearContents();
     hwSheet.getRange('B:B').setNumberFormat('@');
-    hwSheet.getRange(1, 1, allRows.length, 8).setValues(allRows);
+    hwSheet.getRange('H:H').setNumberFormat('@');
+    hwSheet.getRange(1, 1, allRows.length, 9).setValues(allRows);
 
     return { status: 'success', id: finalId, message: 'Homework saved datewise to Google Sheet.' };
   } catch (err) {
@@ -2032,6 +2059,106 @@ function deleteHomeworkInSheet(homeworkId) {
       }
     }
     return { status: 'error', message: 'Homework entry not found.' };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
+function escapeHtmlGAS(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function generateHomeworkPdfInDrive(payload) {
+  try {
+    var className = (payload.className || '').toString().trim();
+    var friendlyDate = (payload.friendlyDate || payload.date || '').toString().trim();
+    var dateIso = (payload.date || '').toString().trim();
+    var classTeacher = (payload.classTeacher || '').toString().trim();
+    var items = payload.items || [];
+    var tomorrowPeriods = payload.tomorrowPeriods || [];
+    var tomorrowDayLabel = (payload.tomorrowDayLabel || "Tomorrow's Timetable").toString();
+
+    var rowsHtml = '';
+    if (items.length === 0) {
+      rowsHtml = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:16px;">No homework entries recorded for this date.</td></tr>';
+    } else {
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        rowsHtml += '<tr>' +
+          '<td style="text-align:center;font-weight:bold;">' + (i + 1) + '</td>' +
+          '<td><strong>' + escapeHtmlGAS(it.subject) + '</strong><br><span style="font-size:11px;color:#4f46e5;">Type: ' + escapeHtmlGAS(it.homeworkType || 'Writing') + '</span></td>' +
+          '<td style="white-space:pre-wrap;">' + escapeHtmlGAS(it.description) + '</td>' +
+          '<td>' + escapeHtmlGAS(it.teacherName || '') + '</td>' +
+          '</tr>';
+      }
+    }
+
+    var ttHtml = '';
+    if (tomorrowPeriods && tomorrowPeriods.length > 0) {
+      var ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
+      ttHtml += '<div style="margin-top:18px;border:1px solid #cbd5e1;border-radius:8px;padding:12px;background:#f8fafc;">' +
+        '<h3 style="margin:0 0 8px 0;font-size:14px;color:#1e293b;">' + escapeHtmlGAS(tomorrowDayLabel) + '</h3>' +
+        '<div style="font-size:12px;line-height:1.6;">';
+      for (var p = 0; p < tomorrowPeriods.length; p++) {
+        var label = (ordinals[p] || ((p + 1) + 'th')) + ' Period';
+        ttHtml += '<div><strong>' + label + ':</strong> ' + escapeHtmlGAS(tomorrowPeriods[p]) + '</div>';
+      }
+      ttHtml += '</div></div>';
+    }
+
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:24px;}' +
+      '.header{text-align:center;border-bottom:3px solid #4f46e5;padding-bottom:12px;margin-bottom:16px;}' +
+      '.school{font-size:22px;font-weight:bold;color:#1e1b4b;letter-spacing:0.5px;}' +
+      '.tagline{font-size:12px;color:#475569;font-style:italic;margin-top:2px;}' +
+      '.addr{font-size:11px;color:#64748b;margin-top:4px;}' +
+      '.meta{display:flex;justify-content:space-between;background:#eef2ff;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px;}' +
+      'table{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+      'th{background:#4f46e5;color:#fff;padding:8px 10px;text-align:left;}' +
+      'td{border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top;}' +
+      '.footer{margin-top:24px;display:flex;justify-content:space-between;font-size:12px;color:#475569;}' +
+      '</style></head><body>' +
+      '<div class="header">' +
+      '<div class="school">SUCCESS SCHOOL INDI</div>' +
+      '<div class="tagline">Education for Excellence</div>' +
+      '<div class="addr">#Bhyavanti Nagar, Indi, Karnataka &bull; +91 99648 82070</div>' +
+      '</div>' +
+      '<div class="meta">' +
+      '<div><strong>Daily Homework Notice</strong> &mdash; <strong>Class:</strong> ' + escapeHtmlGAS(className) + '</div>' +
+      '<div><strong>Date:</strong> ' + escapeHtmlGAS(friendlyDate) + ' &bull; <strong>Subjects:</strong> ' + items.length + '</div>' +
+      '</div>' +
+      '<table><thead><tr><th style="width:40px;text-align:center;">#</th><th style="width:150px;">Subject &amp; Type</th><th>Homework Details</th><th style="width:140px;">Teacher</th></tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody></table>' +
+      ttHtml +
+      '<div class="footer">' +
+      '<div>Class Teacher: <strong>' + escapeHtmlGAS(classTeacher) + '</strong></div>' +
+      '<div>Principal / Coordinator</div>' +
+      '</div></body></html>';
+
+    var blob = HtmlService.createHtmlOutput(html).getAs('application/pdf');
+    var safeClass = className.replace(/[^a-zA-Z0-9_-]/g, '_');
+    var fileName = 'Homework_' + safeClass + '_' + (dateIso || 'Notice') + '.pdf';
+    blob.setName(fileName);
+
+    var rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+    var subFolders = rootFolder.getFoldersByName('Daily Homework PDFs');
+    var pdfFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder('Daily Homework PDFs');
+
+    // Replace existing PDF with same name if regenerating for same class & date
+    var existingFiles = pdfFolder.getFilesByName(fileName);
+    while (existingFiles.hasNext()) {
+      existingFiles.next().setTrashed(true);
+    }
+
+    var file = pdfFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view?usp=drivesdk';
+
+    return { status: 'success', pdfUrl: pdfUrl, fileName: fileName };
   } catch (err) {
     return { status: 'error', message: err.message };
   }
