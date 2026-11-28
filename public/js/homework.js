@@ -301,7 +301,7 @@ async function loadConsolidatedHomework() {
 
   if (!className || !previewEl) return;
 
-  previewEl.value = 'Loading consolidated homework...';
+  previewEl.value = 'Generating PDF & loading consolidated homework...';
   try {
     const res = await apiCall(`/api/homework/consolidated?date=${encodeURIComponent(date)}&className=${encodeURIComponent(className)}`);
     if (!res || res.status !== 'success') {
@@ -319,52 +319,18 @@ async function loadConsolidatedHomework() {
     }
 
     if (groupInfoEl) {
+      const pdfBadge = res.pdfUrl
+        ? `<span style="margin-left: 10px; color: #4338ca;"><i class="fas fa-file-pdf"></i> PDF Attached</span>`
+        : '';
       if (res.whatsappGroup) {
-        groupInfoEl.innerHTML = `<i class="fab fa-whatsapp" style="color: #16a34a;"></i> Target Group: <strong>${escapeHwHtml(res.whatsappGroup.name || res.className)}</strong>`;
+        groupInfoEl.innerHTML = `<i class="fab fa-whatsapp" style="color: #16a34a;"></i> Target Group: <strong>${escapeHwHtml(res.whatsappGroup.name || res.className)}</strong>${pdfBadge}`;
       } else {
-        groupInfoEl.innerHTML = `<i class="fas fa-info-circle" style="color: #64748b;"></i> Click "Send to WhatsApp Group" to open WhatsApp with the message pre-filled, then select your ${escapeHwHtml(res.className)} group.`;
+        groupInfoEl.innerHTML = `<i class="fas fa-info-circle" style="color: #64748b;"></i> Click "Send to WhatsApp" to open WhatsApp with the message pre-filled, then select your ${escapeHwHtml(res.className)} group.${pdfBadge}`;
       }
-    }
-
-    const openGroupBtn = document.getElementById('hwOpenGroupBtn');
-    if (openGroupBtn) {
-      openGroupBtn.style.display = res.groupInviteUrl ? 'inline-flex' : 'none';
     }
   } catch (err) {
     console.error('loadConsolidatedHomework error:', err);
     previewEl.value = 'Error loading consolidated homework.';
-  }
-}
-
-async function generateConsolidatedPdf() {
-  const date = (document.getElementById('hwCtDate') || {}).value || getTodayIsoDate();
-  const className = (document.getElementById('hwCtClassSelect') || {}).value || '';
-  const previewEl = document.getElementById('hwConsolidatedPreview');
-  const btn = document.getElementById('hwGeneratePdfBtn');
-  if (!className) return showStatus('Please select a class first.', 'error');
-
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
-  }
-
-  try {
-    const res = await apiCall('/api/homework/pdf', 'POST', { date, className });
-    if (res && res.status === 'success') {
-      hwConsolidatedData = res;
-      if (previewEl) previewEl.value = res.formattedMessage || '';
-      showStatus('PDF generated in Google Drive and attached to WhatsApp message!', 'success');
-    } else {
-      showStatus((res && res.message) || 'Failed to generate PDF.', 'error');
-    }
-  } catch (err) {
-    console.error('generateConsolidatedPdf error:', err);
-    showStatus('Error generating PDF.', 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-file-pdf"></i> Generate PDF &amp; Attach Link';
-    }
   }
 }
 
@@ -400,13 +366,7 @@ function sendConsolidatedToWhatsApp() {
 
   const waUrl = phoneDigits
     ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`
-    : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
 
   window.open(waUrl, '_blank', 'noopener,noreferrer');
-}
-
-function openHomeworkGroupLink() {
-  if (hwConsolidatedData && hwConsolidatedData.groupInviteUrl) {
-    window.open(hwConsolidatedData.groupInviteUrl, '_blank', 'noopener,noreferrer');
-  }
 }
