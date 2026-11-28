@@ -205,8 +205,8 @@ function addHomeworkItemRow(initialValue = '') {
   row.style.cssText = 'display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;';
   row.innerHTML = `
     <span class="hw-item-num" style="font-weight: 700; padding-top: 10px; min-width: 20px; color: #334155;">${count}.</span>
-    <textarea class="hw-item-input" rows="2" placeholder="Enter homework ${count}..." style="flex: 1; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
-    <button type="button" class="btn-secondary" style="padding: 8px 10px; color: #dc2626; margin-top: 2px;" onclick="removeHomeworkItemRow(this)" title="Remove">
+    <textarea class="hw-item-input" rows="2" placeholder="Enter homework ${count}..." style="flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+    <button type="button" onclick="removeHomeworkItemRow(this)" title="Remove" style="width: 32px; height: 32px; min-width: 32px; flex-shrink: 0; border-radius: 8px; border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; margin-top: 4px; font-size: 0.85rem;">
       <i class="fas fa-times"></i>
     </button>
   `;
@@ -278,7 +278,7 @@ function handleHomeworkImageSelect(input) {
         <div style="display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 10px;">
           <img src="${e.target.result}" alt="Preview" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px;">
           <span style="font-size: 0.85rem; color: #334155;">${escapeHwHtml(file.name)}</span>
-          <button type="button" class="btn-secondary" style="padding: 4px 8px; color: #dc2626;" onclick="clearHomeworkImage()"><i class="fas fa-times"></i></button>
+          <button type="button" onclick="clearHomeworkImage()" style="width: 28px; height: 28px; min-width: 28px; flex-shrink: 0; border-radius: 6px; border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;"><i class="fas fa-times"></i></button>
         </div>
       `;
     };
@@ -314,7 +314,7 @@ function handleHomeworkPdfSelect(input) {
       <div style="display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 10px;">
         <i class="fas fa-file-pdf" style="color: #dc2626;"></i>
         <span style="font-size: 0.85rem; color: #334155;">${escapeHwHtml(file.name)}</span>
-        <button type="button" class="btn-secondary" style="padding: 4px 8px; color: #dc2626;" onclick="clearHomeworkPdf()"><i class="fas fa-times"></i></button>
+        <button type="button" onclick="clearHomeworkPdf()" style="width: 28px; height: 28px; min-width: 28px; flex-shrink: 0; border-radius: 6px; border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;"><i class="fas fa-times"></i></button>
       </div>
     `;
   }
