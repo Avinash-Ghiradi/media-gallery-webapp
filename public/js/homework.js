@@ -41,10 +41,12 @@ function switchHomeworkSubTab(subTab) {
 
   const addSec = document.getElementById('hwSectionAdd');
   const subSec = document.getElementById('hwSectionSubmitted');
+  const histSec = document.getElementById('hwSectionHistory');
   const sendSec = document.getElementById('hwSectionSend');
 
   if (addSec) addSec.style.display = hwActiveSubTab === 'add' ? 'block' : 'none';
   if (subSec) subSec.style.display = hwActiveSubTab === 'submitted' ? 'block' : 'none';
+  if (histSec) histSec.style.display = hwActiveSubTab === 'history' ? 'block' : 'none';
   if (sendSec) sendSec.style.display = hwActiveSubTab === 'send' ? 'block' : 'none';
 
   if (hwActiveSubTab === 'submitted') {
@@ -52,6 +54,9 @@ function switchHomeworkSubTab(subTab) {
     const d2 = document.getElementById('hwSubmittedDate');
     if (d1 && d2 && d1.value) d2.value = d1.value;
     loadMyHomeworkList();
+  } else if (hwActiveSubTab === 'history') {
+    initHomeworkHistoryDefaults();
+    loadHomeworkHistory();
   } else if (hwActiveSubTab === 'send') {
     loadConsolidatedHomework();
   }
@@ -223,9 +228,12 @@ function populateTeacherDropdowns(profile) {
   }
 
   const filterSel = document.getElementById('hwSubmittedClassFilter');
+  const histClassSel = document.getElementById('hwHistClassFilter');
+  const histSubjSel = document.getElementById('hwHistSubjectFilter');
+  const filterClasses = Array.from(new Set([...(profile.assignedClasses || []), ...(profile.classTeacherOf || [])]));
+
   if (filterSel) {
     const prevFilter = filterSel.value;
-    const filterClasses = Array.from(new Set([...(profile.assignedClasses || []), ...(profile.classTeacherOf || [])]));
     filterSel.innerHTML = '<option value="">All Classes</option>';
     filterClasses.forEach(c => {
       const opt = document.createElement('option');
@@ -235,6 +243,37 @@ function populateTeacherDropdowns(profile) {
     });
     if (prevFilter && filterClasses.includes(prevFilter)) {
       filterSel.value = prevFilter;
+    }
+  }
+
+  if (histClassSel) {
+    const prevHistClass = histClassSel.value;
+    histClassSel.innerHTML = '<option value="">All Classes</option>';
+    filterClasses.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      histClassSel.appendChild(opt);
+    });
+    if (prevHistClass && filterClasses.includes(prevHistClass)) {
+      histClassSel.value = prevHistClass;
+    }
+  }
+
+  if (histSubjSel) {
+    const prevHistSubj = histSubjSel.value;
+    const subjList = profile.allSubjects && profile.allSubjects.length > 0
+      ? profile.allSubjects
+      : (profile.assignedSubjects || []);
+    histSubjSel.innerHTML = '<option value="">All Subjects</option>';
+    subjList.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      histSubjSel.appendChild(opt);
+    });
+    if (prevHistSubj && subjList.includes(prevHistSubj)) {
+      histSubjSel.value = prevHistSubj;
     }
   }
 }
@@ -292,6 +331,109 @@ async function loadMyHomeworkList() {
   } catch (err) {
     console.error('loadMyHomeworkList error:', err);
     listEl.innerHTML = '<p style="color: #ef4444;">Error loading homework list.</p>';
+  }
+}
+
+function initHomeworkHistoryDefaults() {
+  const fromEl = document.getElementById('hwHistFromDate');
+  const toEl = document.getElementById('hwHistToDate');
+  const today = getTodayIsoDate();
+  if (toEl && !toEl.value) toEl.value = today;
+  if (fromEl && !fromEl.value) {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    fromEl.value = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  }
+}
+
+function resetHomeworkHistoryFilters() {
+  const fromEl = document.getElementById('hwHistFromDate');
+  const toEl = document.getElementById('hwHistToDate');
+  const clsEl = document.getElementById('hwHistClassFilter');
+  const subjEl = document.getElementById('hwHistSubjectFilter');
+  const searchEl = document.getElementById('hwHistSearch');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+  if (clsEl) clsEl.value = '';
+  if (subjEl) subjEl.value = '';
+  if (searchEl) searchEl.value = '';
+  initHomeworkHistoryDefaults();
+  loadHomeworkHistory();
+}
+
+async function loadHomeworkHistory() {
+  const container = document.getElementById('hwHistoryListContainer');
+  if (!container) return;
+
+  const fromDate = (document.getElementById('hwHistFromDate') || {}).value || '';
+  const toDate = (document.getElementById('hwHistToDate') || {}).value || '';
+  const className = (document.getElementById('hwHistClassFilter') || {}).value || '';
+  const subject = (document.getElementById('hwHistSubjectFilter') || {}).value || '';
+  const search = ((document.getElementById('hwHistSearch') || {}).value || '').trim();
+
+  container.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading homework history...</p></div>';
+  try {
+    const params = new URLSearchParams();
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    if (className) params.set('className', className);
+    if (subject) params.set('subject', subject);
+    if (search) params.set('search', search);
+
+    const res = await apiCall(`/api/homework/history?${params.toString()}`);
+    if (!res || res.status !== 'success') {
+      container.innerHTML = `<p style="color: #ef4444;">${escapeHwHtml((res && res.message) || 'Failed to load homework history.')}</p>`;
+      return;
+    }
+
+    const items = res.items || [];
+    if (items.length === 0) {
+      container.innerHTML = '<p style="color: #64748b; padding: 8px 0;">No homework history found for the selected filters.</p>';
+      return;
+    }
+
+    // Group datewise
+    const grouped = {};
+    items.forEach(it => {
+      const key = it.date || 'Unknown';
+      if (!grouped[key]) grouped[key] = { label: it.friendlyDate || key, list: [] };
+      grouped[key].list.push(it);
+    });
+
+    container.innerHTML = Object.keys(grouped).map(dateKey => {
+      const grp = grouped[dateKey];
+      const rowsHtml = grp.list.map(item => `
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 8px; background: #fff;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+            <div>
+              <span class="assigned-class-badge">${escapeHwHtml(item.className)}</span>
+              <strong style="margin-left: 6px; color: #0f172a;">${escapeHwHtml(item.subject)}</strong>
+              <span class="assigned-class-badge" style="background: rgba(79,70,229,0.1); color: #4338ca; margin-left: 6px;">${escapeHwHtml(item.homeworkType || 'Writing')}</span>
+            </div>
+            <span style="font-size: 0.8rem; color: #64748b;">by ${escapeHwHtml(item.teacherName)}</span>
+          </div>
+          <div style="margin-top: 8px; white-space: pre-wrap; color: #334155; font-size: 0.93rem;">${escapeHwHtml(item.description)}</div>
+          ${item.teacherNote ? `<div style="margin-top: 6px; font-size: 0.84rem; color: #475569;"><i class="fas fa-sticky-note"></i> <strong>Note:</strong> ${escapeHwHtml(item.teacherNote)}</div>` : ''}
+          <div style="margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.82rem;">
+            ${item.videoLink ? `<a href="${escapeHwHtml(item.videoLink)}" target="_blank" rel="noopener noreferrer" style="color: #dc2626;"><i class="fab fa-youtube"></i> Video Link</a>` : ''}
+            ${item.attachmentUrl ? `<a href="${escapeHwHtml(item.attachmentUrl)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb;"><i class="fas fa-image"></i> Image Attachment</a>` : ''}
+            ${item.pdfNotesUrl ? `<a href="${escapeHwHtml(item.pdfNotesUrl)}" target="_blank" rel="noopener noreferrer" style="color: #7c3aed;"><i class="fas fa-file-pdf"></i> PDF Notes</a>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      return `
+        <div style="margin-bottom: 16px;">
+          <div style="font-weight: 700; font-size: 0.92rem; color: #4338ca; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;">
+            <i class="fas fa-calendar-day"></i> ${escapeHwHtml(grp.label)} (${grp.list.length})
+          </div>
+          ${rowsHtml}
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('loadHomeworkHistory error:', err);
+    container.innerHTML = '<p style="color: #ef4444;">Error loading homework history.</p>';
   }
 }
 
