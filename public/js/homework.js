@@ -42,11 +42,13 @@ function switchHomeworkSubTab(subTab) {
   const addSec = document.getElementById('hwSectionAdd');
   const subSec = document.getElementById('hwSectionSubmitted');
   const histSec = document.getElementById('hwSectionHistory');
+  const trackSec = document.getElementById('hwSectionTracker');
   const sendSec = document.getElementById('hwSectionSend');
 
   if (addSec) addSec.style.display = hwActiveSubTab === 'add' ? 'block' : 'none';
   if (subSec) subSec.style.display = hwActiveSubTab === 'submitted' ? 'block' : 'none';
   if (histSec) histSec.style.display = hwActiveSubTab === 'history' ? 'block' : 'none';
+  if (trackSec) trackSec.style.display = hwActiveSubTab === 'tracker' ? 'block' : 'none';
   if (sendSec) sendSec.style.display = hwActiveSubTab === 'send' ? 'block' : 'none';
 
   if (hwActiveSubTab === 'submitted') {
@@ -57,6 +59,10 @@ function switchHomeworkSubTab(subTab) {
   } else if (hwActiveSubTab === 'history') {
     initHomeworkHistoryDefaults();
     loadHomeworkHistory();
+  } else if (hwActiveSubTab === 'tracker') {
+    const td = document.getElementById('hwTrackerDate');
+    if (td && !td.value) td.value = getTodayIsoDate();
+    loadHomeworkTracker();
   } else if (hwActiveSubTab === 'send') {
     loadConsolidatedHomework();
   }
@@ -824,10 +830,95 @@ function copyConsolidatedHomework() {
     .catch(() => showStatus('Failed to copy message.', 'error'));
 }
 
+function renderTrafficDot(light) {
+  const colors = {
+    red: { bg: '#ef4444', shadow: 'rgba(239,68,68,0.45)', label: 'Pending' },
+    yellow: { bg: '#f59e0b', shadow: 'rgba(245,158,11,0.45)', label: 'Partial' },
+    green: { bg: '#22c55e', shadow: 'rgba(34,197,94,0.45)', label: 'Done' }
+  };
+  const c = colors[light] || colors.red;
+  return `<span title="${c.label}" style="display:inline-block;width:13px;height:13px;border-radius:50%;background:${c.bg};box-shadow:0 0 8px ${c.shadow};flex-shrink:0;"></span>`;
+}
+
+async function loadHomeworkTracker() {
+  const date = (document.getElementById('hwTrackerDate') || {}).value || getTodayIsoDate();
+  const classesBox = document.getElementById('hwTrackerClassesBox');
+  const teachersBox = document.getElementById('hwTrackerTeachersBox');
+  if (!classesBox || !teachersBox) return;
+
+  classesBox.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading class status...</p></div>';
+  teachersBox.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading teachers status...</p></div>';
+
+  try {
+    const res = await apiCall(`/api/homework/tracker?date=${encodeURIComponent(date)}`);
+    if (!res || res.status !== 'success') {
+      classesBox.innerHTML = '<p style="color:#ef4444;">Failed to load tracker.</p>';
+      teachersBox.innerHTML = '';
+      return;
+    }
+
+    const classLights = res.classLights || [];
+    classesBox.innerHTML = classLights.map(c => {
+      const sentBadge = c.sentInfo
+        ? `<span style="font-size:0.8rem;color:#15803d;background:#dcfce7;padding:3px 8px;border-radius:999px;font-weight:600;"><i class="fab fa-whatsapp"></i> Sent by ${escapeHwHtml(c.sentInfo.classTeacher)} at ${escapeHwHtml(c.sentInfo.sentAt)}</span>`
+        : `<span style="font-size:0.8rem;color:#b45309;background:#fef3c7;padding:3px 8px;border-radius:999px;font-weight:600;"><i class="fas fa-clock"></i> WhatsApp Not Sent</span>`;
+
+      const pendingHtml = (c.pendingTeachers || []).length > 0
+        ? `<div style="margin-top:4px;font-size:0.8rem;color:#dc2626;">Pending: ${c.pendingTeachers.map(escapeHwHtml).join(', ')}</div>`
+        : `<div style="margin-top:4px;font-size:0.8rem;color:#16a34a;">All assigned subject teachers submitted</div>`;
+
+      return `
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${renderTrafficDot(c.light)}
+              <strong>${escapeHwHtml(c.className)}</strong>
+              <span style="font-size:0.8rem;color:#64748b;">(CT: ${escapeHwHtml(c.classTeacher)})</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-size:0.8rem;color:#334155;font-weight:600;">${c.submittedTeachersCount}/${c.expectedTeachersCount} teachers (${c.submittedCount} subjects)</span>
+              ${sentBadge}
+            </div>
+          </div>
+          ${pendingHtml}
+        </div>
+      `;
+    }).join('');
+
+    const teacherLights = res.teacherLights || [];
+    teachersBox.innerHTML = teacherLights.map(t => `
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${renderTrafficDot(t.light)}
+          <div>
+            <strong>${escapeHwHtml(t.teacherName)}</strong>
+            ${t.classTeacherOf ? `<span class="assigned-class-badge" style="margin-left:6px;">CT: ${escapeHwHtml(t.classTeacherOf)}</span>` : ''}
+            ${t.submittedDetails.length > 0 ? `<div style="font-size:0.78rem;color:#475569;margin-top:2px;">Submitted: ${t.submittedDetails.map(escapeHwHtml).join(', ')}</div>` : `<div style="font-size:0.78rem;color:#dc2626;margin-top:2px;">No homework submitted yet</div>`}
+          </div>
+        </div>
+        <span style="font-size:0.82rem;font-weight:700;color:#334155;">${t.submittedCount}/${t.expectedCount}</span>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('loadHomeworkTracker error:', err);
+    classesBox.innerHTML = '<p style="color:#ef4444;">Error loading tracker.</p>';
+    teachersBox.innerHTML = '';
+  }
+}
+
 function sendConsolidatedToWhatsApp() {
   const previewEl = document.getElementById('hwConsolidatedPreview');
   const text = previewEl ? previewEl.value.trim() : '';
   if (!text) return showStatus('No consolidated homework message to send.', 'error');
+
+  if (hwConsolidatedData) {
+    apiCall('/api/homework/mark-sent', 'POST', {
+      date: hwConsolidatedData.date,
+      className: hwConsolidatedData.className,
+      subjectsCount: (hwConsolidatedData.items || []).length,
+      pdfUrl: hwConsolidatedData.pdfUrl || ''
+    }).catch(() => {});
+  }
 
   const rawTarget = hwConsolidatedData && hwConsolidatedData.whatsappGroup && hwConsolidatedData.whatsappGroup.phoneOrLink
     ? String(hwConsolidatedData.whatsappGroup.phoneOrLink).trim()
