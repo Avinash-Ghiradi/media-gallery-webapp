@@ -210,12 +210,14 @@ async function loadMyHomeworkList() {
             <span style="font-size: 0.8rem; color: #64748b; margin-left: 8px;">by ${escapeHwHtml(item.teacherName)}</span>
           </div>
           <div style="display: flex; gap: 6px;">
+            ${item.canModify !== false ? `
             <button type="button" class="btn-secondary" style="padding: 4px 10px; font-size: 0.8rem;" onclick="editHomeworkItem('${escapeHwHtml(item.id)}')">
               <i class="fas fa-edit"></i> Edit
             </button>
             <button type="button" class="btn-secondary" style="padding: 4px 10px; font-size: 0.8rem; color: #dc2626;" onclick="deleteHomeworkItem('${escapeHwHtml(item.id)}')">
               <i class="fas fa-trash"></i>
             </button>
+            ` : `<span style="font-size: 0.78rem; color: #64748b;"><i class="fas fa-lock"></i> Only ${escapeHwHtml(item.teacherName || 'creator')} can edit</span>`}
           </div>
         </div>
         <div style="margin-top: 8px; white-space: pre-wrap; color: #334155; font-size: 0.94rem;">${escapeHwHtml(item.description)}</div>
@@ -390,6 +392,10 @@ function resetHomeworkForm() {
 function editHomeworkItem(id) {
   const item = hwListCache.find(x => x.id === id);
   if (!item) return;
+  if (item.canModify === false) {
+    showStatus(`Only ${item.teacherName || 'the original teacher'} can edit this homework.`, 'error');
+    return;
+  }
   const dateEl = document.getElementById('hwDate');
   const classEl = document.getElementById('hwClassSelect');
   const subjEl = document.getElementById('hwSubjectSelect');
