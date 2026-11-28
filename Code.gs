@@ -40,6 +40,8 @@ function doGet(e) {
         res = getUsersFromSheet();
       } else if (action === 'getUsersListForAdmin') {
         res = getUsersListForAdmin();
+      } else if (action === 'getHomeworkBundle') {
+        res = getHomeworkBundle();
       }
 
       if (res) {
@@ -103,6 +105,12 @@ function doPost(e) {
       res = getBrandingFromSheet();
     } else if (action === 'saveBrandingToSheet') {
       res = saveBrandingToSheet(contents.kind, contents.url);
+    } else if (action === 'getHomeworkBundle') {
+      res = getHomeworkBundle();
+    } else if (action === 'saveHomeworkInSheet') {
+      res = saveHomeworkInSheet(contents.record || contents);
+    } else if (action === 'deleteHomeworkInSheet') {
+      res = deleteHomeworkInSheet(contents.id);
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -291,12 +299,16 @@ function getUsersFromSheet() {
         var assignedClass = row[2] ? row[2].toString().trim() : '';
         var details = row[3] ? row[3].toString().trim() : '';
         var photoUrl = row[4] ? row[4].toString().trim() : '';
+        var assignedClasses = row[6] ? row[6].toString().trim() : '';
+        var assignedSubjects = row[7] ? row[7].toString().trim() : '';
         users[uname] = {
           password: pwd,
           assignedClass: assignedClass,
           details: details,
           photoUrl: photoUrl,
-          fullName: fullName
+          fullName: fullName,
+          assignedClasses: assignedClasses,
+          assignedSubjects: assignedSubjects
         };
       }
     }
@@ -1821,4 +1833,203 @@ function generateWhatsAppMessage(eventName, className, folderUrl, fileCount) {
     '*📞 Phone: School Office Number*';
 
   return message;
+}
+
+// =====================================================================
+// HOMEWORK & WHATSAPP GROUPS BRIDGE (USES USERS_SHEET_ID)
+// =====================================================================
+
+var HW_DEFAULT_CLASSES = [
+  'Nursery', 'LKG A', 'LKG B', 'UKG',
+  '1st Standard', '2nd Standard', '3rd Standard A', '3rd Standard B',
+  '4th Standard', '5th Standard', '6th Standard'
+];
+
+function formatHwDateValue(val) {
+  if (val === null || val === undefined || val === '') return '';
+  if (Object.prototype.toString.call(val) === '[object Date]' && !isNaN(val.getTime())) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var s = val.toString().trim().replace(/^'/, '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmy) {
+    return dmy[3] + '-' + ('0' + dmy[2]).slice(-2) + '-' + ('0' + dmy[1]).slice(-2);
+  }
+  return s;
+}
+
+function ensureHomeworkSheetsGAS() {
+  var ss = SpreadsheetApp.openById(USERS_SHEET_ID);
+
+  var wgSheet = ss.getSheetByName('WhatsAppGroups');
+  if (!wgSheet) {
+    wgSheet = ss.insertSheet('WhatsAppGroups');
+  }
+  if (wgSheet.getLastRow() === 0) {
+    var wgRows = [['Group ID', 'Group Name', 'Class', 'PhoneOrGroupLink', 'IsActive']];
+    for (var i = 0; i < HW_DEFAULT_CLASSES.length; i++) {
+      var cls = HW_DEFAULT_CLASSES[i];
+      wgRows.push(['G' + (i + 1), cls + ' Parents', cls, '', 'YES']);
+    }
+    wgSheet.getRange(1, 1, wgRows.length, 5).setValues(wgRows);
+  }
+
+  var hwSheet = ss.getSheetByName('Homework');
+  if (!hwSheet) {
+    hwSheet = ss.insertSheet('Homework');
+  }
+  if (hwSheet.getLastRow() === 0) {
+    hwSheet.getRange(1, 1, 1, 8).setValues([
+      ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt']
+    ]);
+  }
+  hwSheet.getRange('B:B').setNumberFormat('@');
+  return { ss: ss, wgSheet: wgSheet, hwSheet: hwSheet };
+}
+
+function getHomeworkBundle() {
+  try {
+    var sheetsObj = ensureHomeworkSheetsGAS();
+    var usersSheet = ensureUsersSheetExists();
+    var uData = usersSheet.getDataRange().getValues();
+    var uStart = uData[0] && uData[0][0] && (uData[0][0].toString().toLowerCase().indexOf('username') !== -1 || uData[0][0].toString().toLowerCase().indexOf('mobile') !== -1) ? 1 : 0;
+    var usersList = [];
+    for (var i = uStart; i < uData.length; i++) {
+      var r = uData[i];
+      var uname = r[0] ? r[0].toString().trim() : '';
+      if (!uname || uname.indexOf('__BRANDING_') === 0) continue;
+      usersList.push({
+        username: uname,
+        classTeacher: r[2] ? r[2].toString().trim() : '',
+        designation: r[3] ? r[3].toString().trim() : '',
+        fullName: r[5] ? r[5].toString().trim() : '',
+        classes: r[6] ? r[6].toString().trim() : '',
+        subjects: r[7] ? r[7].toString().trim() : ''
+      });
+    }
+
+    var wgData = sheetsObj.wgSheet.getDataRange().getValues();
+    var groups = [];
+    for (var g = 1; g < wgData.length; g++) {
+      var gr = wgData[g];
+      if (!gr[2] && !gr[1]) continue;
+      groups.push({
+        id: gr[0] ? gr[0].toString().trim() : '',
+        name: gr[1] ? gr[1].toString().trim() : '',
+        className: gr[2] ? gr[2].toString().trim() : '',
+        phoneOrLink: gr[3] ? gr[3].toString().trim() : '',
+        isActive: (gr[4] ? gr[4].toString().trim() : 'YES').toUpperCase()
+      });
+    }
+
+    var hwData = sheetsObj.hwSheet.getDataRange().getValues();
+    var homework = [];
+    for (var h = 1; h < hwData.length; h++) {
+      var hr = hwData[h];
+      if (!hr[0] && !hr[1] && !hr[2]) continue;
+      homework.push({
+        id: hr[0] ? hr[0].toString().trim() : ('HW-' + (h + 1)),
+        date: formatHwDateValue(hr[1]),
+        className: hr[2] ? hr[2].toString().trim() : '',
+        subject: hr[3] ? hr[3].toString().trim() : '',
+        teacherName: hr[4] ? hr[4].toString().trim() : '',
+        teacherPhone: hr[5] ? hr[5].toString().trim() : '',
+        description: hr[6] ? hr[6].toString().trim() : '',
+        updatedAt: hr[7] ? hr[7].toString().trim() : ''
+      });
+    }
+
+    return {
+      status: 'success',
+      source: 'google-sheet',
+      usersList: usersList,
+      groups: groups,
+      homework: homework
+    };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
+function saveHomeworkInSheet(record) {
+  try {
+    var sheetsObj = ensureHomeworkSheetsGAS();
+    var hwSheet = sheetsObj.hwSheet;
+    var data = hwSheet.getDataRange().getValues();
+    var targetDate = formatHwDateValue(record.date);
+    var targetClass = (record.className || '').toString().trim();
+    var targetSubject = (record.subject || '').toString().trim();
+
+    var items = [];
+    var existingId = '';
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (!r[0] && !r[1] && !r[2]) continue;
+      var d = formatHwDateValue(r[1]);
+      var c = r[2] ? r[2].toString().trim() : '';
+      var s = r[3] ? r[3].toString().trim() : '';
+      if (d === targetDate && c.toLowerCase() === targetClass.toLowerCase() && s.toLowerCase() === targetSubject.toLowerCase()) {
+        existingId = r[0] ? r[0].toString().trim() : '';
+        continue;
+      }
+      items.push([
+        r[0] ? r[0].toString().trim() : '',
+        d,
+        c,
+        s,
+        r[4] ? r[4].toString().trim() : '',
+        r[5] ? r[5].toString().trim() : '',
+        r[6] ? r[6].toString().trim() : '',
+        r[7] ? r[7].toString().trim() : ''
+      ]);
+    }
+
+    var finalId = existingId || record.id || ('HW-' + new Date().getTime());
+    items.push([
+      finalId,
+      targetDate,
+      targetClass,
+      targetSubject,
+      record.teacherName || '',
+      record.teacherPhone || '',
+      record.description || '',
+      record.updatedAt || ''
+    ]);
+
+    // Sort datewise (newest date first, then Class, then Subject)
+    items.sort(function(a, b) {
+      if (a[1] !== b[1]) return b[1] > a[1] ? 1 : -1;
+      var clsCmp = a[2].localeCompare(b[2]);
+      if (clsCmp !== 0) return clsCmp;
+      return a[3].localeCompare(b[3]);
+    });
+
+    var header = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt'];
+    var allRows = [header].concat(items);
+    hwSheet.clearContents();
+    hwSheet.getRange('B:B').setNumberFormat('@');
+    hwSheet.getRange(1, 1, allRows.length, 8).setValues(allRows);
+
+    return { status: 'success', id: finalId, message: 'Homework saved datewise to Google Sheet.' };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
+function deleteHomeworkInSheet(homeworkId) {
+  try {
+    var sheetsObj = ensureHomeworkSheetsGAS();
+    var hwSheet = sheetsObj.hwSheet;
+    var data = hwSheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim() === homeworkId) {
+        hwSheet.deleteRow(i + 1);
+        return { status: 'success', message: 'Homework deleted from Google Sheet.' };
+      }
+    }
+    return { status: 'error', message: 'Homework entry not found.' };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
 }
