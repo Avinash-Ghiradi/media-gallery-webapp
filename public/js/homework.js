@@ -741,12 +741,18 @@ async function deleteHomeworkItem(id) {
 
 function setupClassTeacherSection(profile) {
   const navBtn = document.getElementById('hwClassTeacherNavBtn');
+  const trackerNavBtn = document.getElementById('hwTrackerNavBtn');
   const ctClassSel = document.getElementById('hwCtClassSelect');
   if (!ctClassSel) return;
 
+  const canSeeTracker = !!(profile.isAdmin || (profile.isClassTeacher && (profile.classTeacherOf || []).length > 0));
+  if (trackerNavBtn) trackerNavBtn.style.display = canSeeTracker ? '' : 'none';
+
   if (!profile.isClassTeacher || (profile.classTeacherOf || []).length === 0) {
     if (navBtn) navBtn.style.display = 'none';
-    if (hwActiveSubTab === 'send') switchHomeworkSubTab('add');
+    if (hwActiveSubTab === 'send' || (hwActiveSubTab === 'tracker' && !canSeeTracker)) {
+      switchHomeworkSubTab('add');
+    }
     return;
   }
 
@@ -844,64 +850,106 @@ async function loadHomeworkTracker() {
   const date = (document.getElementById('hwTrackerDate') || {}).value || getTodayIsoDate();
   const classesBox = document.getElementById('hwTrackerClassesBox');
   const teachersBox = document.getElementById('hwTrackerTeachersBox');
+  const teachersCard = document.getElementById('hwTrackerTeachersCard');
   if (!classesBox || !teachersBox) return;
 
-  classesBox.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading class status...</p></div>';
-  teachersBox.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading teachers status...</p></div>';
+  classesBox.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading status...</p></div>';
+  teachersBox.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading teachers...</p></div>';
 
   try {
     const res = await apiCall(`/api/homework/tracker?date=${encodeURIComponent(date)}`);
     if (!res || res.status !== 'success') {
-      classesBox.innerHTML = '<p style="color:#ef4444;">Failed to load tracker.</p>';
+      classesBox.innerHTML = '<p style="color:#ef4444;">Failed to load status.</p>';
       teachersBox.innerHTML = '';
       return;
     }
 
-    const classLights = res.classLights || [];
-    classesBox.innerHTML = classLights.map(c => {
-      const sentBadge = c.sentInfo
-        ? `<span style="font-size:0.8rem;color:#15803d;background:#dcfce7;padding:3px 8px;border-radius:999px;font-weight:600;"><i class="fab fa-whatsapp"></i> Sent by ${escapeHwHtml(c.sentInfo.classTeacher)} at ${escapeHwHtml(c.sentInfo.sentAt)}</span>`
-        : `<span style="font-size:0.8rem;color:#b45309;background:#fef3c7;padding:3px 8px;border-radius:999px;font-weight:600;"><i class="fas fa-clock"></i> WhatsApp Not Sent</span>`;
+    const isAdmin = !!(hwProfile && hwProfile.isAdmin);
+    const ctClasses = (hwProfile && hwProfile.classTeacherOf) || [];
 
-      const pendingHtml = (c.pendingTeachers || []).length > 0
-        ? `<div style="margin-top:4px;font-size:0.8rem;color:#dc2626;">Pending: ${c.pendingTeachers.map(escapeHwHtml).join(', ')}</div>`
-        : `<div style="margin-top:4px;font-size:0.8rem;color:#16a34a;">All assigned subject teachers submitted</div>`;
+    let classLights = res.classLights || [];
+    if (!isAdmin && ctClasses.length > 0) {
+      classLights = classLights.filter(c =>
+        ctClasses.some(ct => ct.toLowerCase() === c.className.toLowerCase())
+      );
+    }
 
+    const classRows = classLights.map(c => {
+      const waText = c.sentInfo
+        ? `<span style="color:#15803d;font-weight:600;font-size:0.8rem;">Sent (${escapeHwHtml(c.sentInfo.sentAt)})</span>`
+        : `<span style="color:#b45309;font-weight:600;font-size:0.8rem;">Not Sent</span>`;
+      const pendingTip = (c.pendingTeachers || []).length > 0
+        ? `<div style="font-size:0.75rem;color:#dc2626;">Pending: ${c.pendingTeachers.map(escapeHwHtml).join(', ')}</div>`
+        : '';
       return `
-        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              ${renderTrafficDot(c.light)}
-              <strong>${escapeHwHtml(c.className)}</strong>
-              <span style="font-size:0.8rem;color:#64748b;">(CT: ${escapeHwHtml(c.classTeacher)})</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span style="font-size:0.8rem;color:#334155;font-weight:600;">${c.submittedTeachersCount}/${c.expectedTeachersCount} teachers (${c.submittedCount} subjects)</span>
-              ${sentBadge}
-            </div>
-          </div>
-          ${pendingHtml}
-        </div>
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td style="padding:10px 8px;text-align:center;">${renderTrafficDot(c.light)}</td>
+          <td style="padding:10px 8px;"><strong>${escapeHwHtml(c.className)}</strong>${pendingTip}</td>
+          <td style="padding:10px 8px;font-size:0.84rem;color:#475569;">${escapeHwHtml(c.classTeacher)}</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:600;font-size:0.84rem;">${c.submittedTeachersCount}/${c.expectedTeachersCount}</td>
+          <td style="padding:10px 8px;">${waText}</td>
+        </tr>
       `;
     }).join('');
 
-    const teacherLights = res.teacherLights || [];
-    teachersBox.innerHTML = teacherLights.map(t => `
-      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          ${renderTrafficDot(t.light)}
-          <div>
-            <strong>${escapeHwHtml(t.teacherName)}</strong>
-            ${t.classTeacherOf ? `<span class="assigned-class-badge" style="margin-left:6px;">CT: ${escapeHwHtml(t.classTeacherOf)}</span>` : ''}
-            ${t.submittedDetails.length > 0 ? `<div style="font-size:0.78rem;color:#475569;margin-top:2px;">Submitted: ${t.submittedDetails.map(escapeHwHtml).join(', ')}</div>` : `<div style="font-size:0.78rem;color:#dc2626;margin-top:2px;">No homework submitted yet</div>`}
-          </div>
-        </div>
-        <span style="font-size:0.82rem;font-weight:700;color:#334155;">${t.submittedCount}/${t.expectedCount}</span>
+    classesBox.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;text-align:left;color:#475569;font-size:0.78rem;text-transform:uppercase;">
+              <th style="padding:8px;text-align:center;width:44px;">Light</th>
+              <th style="padding:8px;">Class</th>
+              <th style="padding:8px;">Class Teacher</th>
+              <th style="padding:8px;text-align:center;">Teachers</th>
+              <th style="padding:8px;">WhatsApp</th>
+            </tr>
+          </thead>
+          <tbody>${classRows}</tbody>
+        </table>
       </div>
-    `).join('');
+    `;
+
+    if (teachersCard) {
+      teachersCard.style.display = isAdmin ? 'block' : 'none';
+    }
+
+    if (isAdmin) {
+      const teacherLights = res.teacherLights || [];
+      const teacherRows = teacherLights.map(t => {
+        const statusLabel = t.light === 'green'
+          ? '<span style="color:#15803d;font-weight:600;">Completed</span>'
+          : (t.light === 'yellow'
+            ? '<span style="color:#b45309;font-weight:600;">Partial</span>'
+            : '<span style="color:#dc2626;font-weight:600;">Pending</span>');
+        return `
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:9px 8px;text-align:center;">${renderTrafficDot(t.light)}</td>
+            <td style="padding:9px 8px;"><strong>${escapeHwHtml(t.teacherName)}</strong></td>
+            <td style="padding:9px 8px;text-align:center;font-weight:600;">${t.submittedCount}/${t.expectedCount}</td>
+            <td style="padding:9px 8px;">${statusLabel}</td>
+          </tr>
+        `;
+      }).join('');
+
+      teachersBox.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;text-align:left;color:#475569;font-size:0.78rem;text-transform:uppercase;">
+                <th style="padding:8px;text-align:center;width:44px;">Light</th>
+                <th style="padding:8px;">Teacher</th>
+                <th style="padding:8px;text-align:center;">Submitted</th>
+                <th style="padding:8px;">Status</th>
+              </tr>
+            </thead>
+            <tbody>${teacherRows}</tbody>
+          </table>
+        </div>
+      `;
+    }
   } catch (err) {
     console.error('loadHomeworkTracker error:', err);
-    classesBox.innerHTML = '<p style="color:#ef4444;">Error loading tracker.</p>';
+    classesBox.innerHTML = '<p style="color:#ef4444;">Error loading status.</p>';
     teachersBox.innerHTML = '';
   }
 }
