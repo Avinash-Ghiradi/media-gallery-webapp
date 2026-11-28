@@ -815,8 +815,18 @@ async function loadConsolidatedHomework() {
   const loadingScreen = document.getElementById('hwPdfLoadingScreen');
   const groupInfoEl = document.getElementById('hwCtGroupInfo');
   const countEl = document.getElementById('hwCtSubjectCount');
+  const sendBtn = document.getElementById('hwSendWhatsAppBtn');
+  const unlockBtn = document.getElementById('hwResendUnlockBtn');
 
   if (!className || !previewEl) return;
+
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.style.opacity = '0.6';
+    sendBtn.style.cursor = 'not-allowed';
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+  }
+  if (unlockBtn) unlockBtn.style.display = 'none';
 
   if (loadingScreen) loadingScreen.style.display = 'flex';
   previewEl.style.display = 'none';
@@ -826,6 +836,7 @@ async function loadConsolidatedHomework() {
     if (!res || res.status !== 'success') {
       previewEl.value = (res && res.message) || 'Could not load consolidated homework.';
       hwConsolidatedData = null;
+      updateSendWhatsAppLockUI(false, null);
       return;
     }
 
@@ -851,6 +862,7 @@ async function loadConsolidatedHomework() {
   } catch (err) {
     console.error('loadConsolidatedHomework error:', err);
     previewEl.value = 'Error loading consolidated homework.';
+    updateSendWhatsAppLockUI(false, null);
   } finally {
     if (loadingScreen) loadingScreen.style.display = 'none';
     previewEl.style.display = 'block';
