@@ -11,7 +11,7 @@ module.exports = {
   usersSheetName: process.env.USERS_SHEET_NAME || 'users',
   logSheetId: process.env.LOG_SHEET_ID || '14Qf8_lT3D61fbpRTGw1GRKxB2V0UccjBe2LDT0n5DME',
   urlSheetId: process.env.URL_SHEET_ID || '19BwOHx7jmTjCQlh-oiBtXHO_ugG9rpgRghly0sPqJng',
-  homeworkSheetId: process.env.HOMEWORK_SHEET_ID || '1Wpw7F1Jws6zxkX1qev3kGQAig3zMOEigLhXF757fMAM',
+  homeworkSheetId: process.env.HOMEWORK_SHEET_ID || process.env.USERS_SHEET_ID || '14Qf8_lT3D61fbpRTGw1GRKxB2V0UccjBe2LDT0n5DME',
   driveRootFolderId: process.env.DRIVE_ROOT_FOLDER_ID || '1bK-DO_ZtsUe2ASqMWqr0St7zoUv8UlNw',
 
   // Google Cloud Credentials
