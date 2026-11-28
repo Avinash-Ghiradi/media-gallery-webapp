@@ -171,6 +171,10 @@
         <i class="fas fa-history"></i>
         <span>History</span>
       </button>
+      <button type="button" class="tab-button hw-tab-button" data-hw-tab="tracker" onclick="switchHomeworkSubTab('tracker')">
+        <i class="fas fa-traffic-light"></i>
+        <span>Status</span>
+      </button>
       <button type="button" class="tab-button hw-tab-button" id="hwClassTeacherNavBtn" data-hw-tab="send" onclick="switchHomeworkSubTab('send')" style="display: none;">
         <i class="fab fa-whatsapp"></i>
         <span>Class Teacher Send</span>
@@ -837,6 +841,34 @@
               </div>
               <div id="hwHistoryListContainer">
                 <p style="color: #64748b;">Loading homework history...</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="hwSectionTracker" style="display: none;">
+            <div class="card" style="margin-bottom: 18px;">
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span><i class="fas fa-traffic-light"></i> Daily Homework &amp; WhatsApp Sent Status</span>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">
+                  <input type="date" id="hwTrackerDate" onchange="loadHomeworkTracker()" style="width: auto; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem;">
+                  <button type="button" class="btn-secondary" style="width: 38px; height: 38px; min-width: 38px; flex-shrink: 0; padding: 0; justify-content: center;" onclick="loadHomeworkTracker()" title="Refresh">
+                    <i class="fas fa-sync-alt"></i>
+                  </button>
+                </div>
+              </div>
+              <div style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.82rem; color: #475569; margin-bottom: 12px; padding: 8px 12px; background: #f8fafc; border-radius: 8px;">
+                <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#ef4444;margin-right:4px;"></span> Not Submitted</span>
+                <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#f59e0b;margin-right:4px;"></span> Partial / WhatsApp Not Sent</span>
+                <span><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#22c55e;margin-right:4px;"></span> Completed &amp; Sent</span>
+              </div>
+              <div id="hwTrackerClassesBox">
+                <p style="color: #64748b;">Loading class status...</p>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title"><i class="fas fa-users"></i> All Teachers Homework Status</div>
+              <div id="hwTrackerTeachersBox">
+                <p style="color: #64748b;">Loading teachers status...</p>
               </div>
             </div>
           </div>
