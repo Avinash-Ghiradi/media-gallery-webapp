@@ -53,6 +53,27 @@ function getSheetsClient() {
   }
 }
 
+async function callGasBridge(action, payload = {}) {
+  if (!config.gasWebAppUrl) return null;
+  try {
+    const url = new URL(config.gasWebAppUrl);
+    url.searchParams.set('action', action);
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload }),
+      redirect: 'follow'
+    });
+    if (res.ok) {
+      const text = await res.text();
+      return JSON.parse(text);
+    }
+  } catch (err) {
+    console.warn(`Homework GAS bridge failed for ${action}:`, err.message);
+  }
+  return null;
+}
+
 function normalizePhone(val) {
   const digits = String(val || '').replace(/\D/g, '');
   return digits.length > 10 ? digits.slice(-10) : digits;
@@ -263,6 +284,26 @@ async function loadMetadata() {
     readSheetTab('WhatsAppGroups')
   ]);
 
+  if (!usersTab && config.gasWebAppUrl) {
+    const gasBundle = await callGasBridge('getHomeworkBundle');
+    if (gasBundle && gasBundle.status === 'success') {
+      const usersList = gasBundle.usersList || [];
+      return {
+        usersList,
+        allClasses: uniqueList([
+          ...DEFAULT_CLASSES,
+          ...usersList.flatMap(u => [...splitCsv(u.classTeacher), ...splitCsv(u.classes)])
+        ]),
+        allSubjects: uniqueList([
+          ...DEFAULT_SUBJECTS,
+          ...usersList.flatMap(u => splitCsv(u.subjects))
+        ]),
+        groups: gasBundle.groups || [],
+        source: 'google-sheet'
+      };
+    }
+  }
+
   const fallback = readFallbackData();
 
   const usersList = usersTab && usersTab.items.length > 0
@@ -425,6 +466,16 @@ async function readAllHomework() {
       items: tab.items.map(normalizeHwRow).filter(x => x.date || x.className || x.subject)
     };
   }
+  if (config.gasWebAppUrl) {
+    const gasBundle = await callGasBridge('getHomeworkBundle');
+    if (gasBundle && gasBundle.status === 'success') {
+      return {
+        source: 'google-sheet',
+        headers: [],
+        items: (gasBundle.homework || []).map(x => ({ ...x, date: normalizeDateStr(x.date) }))
+      };
+    }
+  }
   const fallback = readFallbackData();
   return { source: 'fallback', headers: [], items: fallback.homework || [] };
 }
@@ -546,6 +597,17 @@ async function saveHomework(sessionUser, payload) {
     }
   }
 
+  if (config.gasWebAppUrl) {
+    const gasRes = await callGasBridge('saveHomeworkInSheet', { record });
+    if (gasRes && gasRes.status === 'success') {
+      record.id = gasRes.id || record.id;
+      return { status: 'success', source: 'google-sheet', item: record, message: gasRes.message || 'Homework saved datewise to Google Sheet.' };
+    }
+    if (gasRes && gasRes.status === 'error') {
+      return { status: 'error', message: `Google Sheet save failed: ${gasRes.message}` };
+    }
+  }
+
   const fallback = readFallbackData();
   const idx = (fallback.homework || []).findIndex(
     x => x.date === date &&
@@ -602,6 +664,13 @@ async function deleteHomework(sessionUser, homeworkId) {
       }
     } catch (err) {
       console.warn('Google Sheet homework delete failed:', err.message);
+    }
+  }
+
+  if (config.gasWebAppUrl) {
+    const gasRes = await callGasBridge('deleteHomeworkInSheet', { id: homeworkId });
+    if (gasRes && gasRes.status === 'success') {
+      return { status: 'success', message: gasRes.message || 'Homework deleted from Google Sheet.' };
     }
   }
 
