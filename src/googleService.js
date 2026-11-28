@@ -119,7 +119,7 @@ async function getUsersFromSheet() {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.usersSheetId,
-      range: `${config.usersSheetName}!A:F`
+      range: `${config.usersSheetName}!A:H`
     });
 
     const rows = response.data.values;
@@ -140,7 +140,9 @@ async function getUsersFromSheet() {
         const assignedClass = row[2] ? row[2].toString().trim() : '';
         const details = row[3] ? row[3].toString().trim() : '';
         const photoUrl = row[4] ? row[4].toString().trim() : '';
-        users[uname] = { password: pwd, assignedClass, details, photoUrl, fullName };
+        const assignedClasses = row[6] ? row[6].toString().trim() : '';
+        const assignedSubjects = row[7] ? row[7].toString().trim() : '';
+        users[uname] = { password: pwd, assignedClass, details, photoUrl, fullName, assignedClasses, assignedSubjects };
       }
     }
     return users;
