@@ -2102,10 +2102,36 @@ function generateHomeworkPdfInDrive(payload) {
     } else {
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
+        var extrasHtml = '';
+        if (it.teacherNote) {
+          extrasHtml += '<div style="margin-top:6px;padding:5px 8px;background:#fefce8;border-left:3px solid #eab308;font-size:11.5px;color:#713f12;"><strong>Note:</strong> ' + escapeHtmlGAS(it.teacherNote) + '</div>';
+        }
+        if (it.videoLink) {
+          extrasHtml += '<div style="margin-top:5px;font-size:11.5px;"><strong>Video Link:</strong> <a href="' + escapeHtmlGAS(it.videoLink) + '" style="color:#dc2626;">' + escapeHtmlGAS(it.videoLink) + '</a></div>';
+        }
+        if (it.pdfNotesUrl) {
+          extrasHtml += '<div style="margin-top:5px;font-size:11.5px;"><strong>PDF Notes:</strong> <a href="' + escapeHtmlGAS(it.pdfNotesUrl) + '" style="color:#4f46e5;">Open PDF Study Material</a></div>';
+        }
+        if (it.attachmentUrl) {
+          var imgDataUri = '';
+          try {
+            var idMatch = String(it.attachmentUrl).match(/[-\w]{25,}/);
+            if (idMatch) {
+              var imgBlob = DriveApp.getFileById(idMatch[0]).getBlob();
+              var mime = imgBlob.getContentType() || 'image/jpeg';
+              imgDataUri = 'data:' + mime + ';base64,' + Utilities.base64Encode(imgBlob.getBytes());
+            }
+          } catch (imgErr) {}
+          if (imgDataUri) {
+            extrasHtml += '<div style="margin-top:6px;"><img src="' + imgDataUri + '" style="max-width:240px;max-height:180px;border-radius:6px;border:1px solid #cbd5e1;" /><br><a href="' + escapeHtmlGAS(it.attachmentUrl) + '" style="font-size:11px;color:#2563eb;">View Full Image</a></div>';
+          } else {
+            extrasHtml += '<div style="margin-top:5px;font-size:11.5px;"><strong>Image Attachment:</strong> <a href="' + escapeHtmlGAS(it.attachmentUrl) + '" style="color:#2563eb;">View Image</a></div>';
+          }
+        }
         rowsHtml += '<tr>' +
           '<td style="text-align:center;font-weight:bold;">' + (i + 1) + '</td>' +
           '<td><strong>' + escapeHtmlGAS(it.subject) + '</strong><br><span style="font-size:11px;color:#4f46e5;">Type: ' + escapeHtmlGAS(it.homeworkType || 'Writing') + '</span></td>' +
-          '<td style="white-space:pre-wrap;">' + escapeHtmlGAS(it.description) + '</td>' +
+          '<td style="white-space:pre-wrap;">' + escapeHtmlGAS(it.description) + extrasHtml + '</td>' +
           '<td>' + escapeHtmlGAS(it.teacherName || '') + '</td>' +
           '</tr>';
       }
