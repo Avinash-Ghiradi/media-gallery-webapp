@@ -113,6 +113,8 @@ function doPost(e) {
       res = deleteHomeworkInSheet(contents.id);
     } else if (action === 'generateHomeworkPdf') {
       res = generateHomeworkPdfInDrive(contents);
+    } else if (action === 'uploadHomeworkFile') {
+      res = uploadHomeworkFileToDrive(contents);
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -1882,8 +1884,8 @@ function ensureHomeworkSheetsGAS() {
     hwSheet = ss.insertSheet('Homework');
   }
   if (hwSheet.getLastRow() === 0) {
-    hwSheet.getRange(1, 1, 1, 9).setValues([
-      ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType']
+    hwSheet.getRange(1, 1, 1, 13).setValues([
+      ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType', 'VideoLink', 'TeacherNote', 'AttachmentUrl', 'PdfNotesUrl']
     ]);
   }
   hwSheet.getRange('B:B').setNumberFormat('@');
@@ -1942,7 +1944,11 @@ function getHomeworkBundle() {
         updatedAt: (Object.prototype.toString.call(hr[7]) === '[object Date]' && !isNaN(hr[7].getTime()))
           ? Utilities.formatDate(hr[7], 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss')
           : (hr[7] ? hr[7].toString().trim() : ''),
-        homeworkType: hr[8] ? hr[8].toString().trim() : 'Writing'
+        homeworkType: hr[8] ? hr[8].toString().trim() : 'Writing',
+        videoLink: hr[9] ? hr[9].toString().trim() : '',
+        teacherNote: hr[10] ? hr[10].toString().trim() : '',
+        attachmentUrl: hr[11] ? hr[11].toString().trim() : '',
+        pdfNotesUrl: hr[12] ? hr[12].toString().trim() : ''
       });
     }
 
@@ -2009,7 +2015,11 @@ function saveHomeworkInSheet(record) {
         r[5] ? r[5].toString().trim() : '',
         r[6] ? r[6].toString().trim() : '',
         r[7] ? r[7].toString().trim() : '',
-        r[8] ? r[8].toString().trim() : 'Writing'
+        r[8] ? r[8].toString().trim() : 'Writing',
+        r[9] ? r[9].toString().trim() : '',
+        r[10] ? r[10].toString().trim() : '',
+        r[11] ? r[11].toString().trim() : '',
+        r[12] ? r[12].toString().trim() : ''
       ]);
     }
 
@@ -2023,7 +2033,11 @@ function saveHomeworkInSheet(record) {
       record.teacherPhone || '',
       record.description || '',
       record.updatedAt || '',
-      record.homeworkType || 'Writing'
+      record.homeworkType || 'Writing',
+      record.videoLink || '',
+      record.teacherNote || '',
+      record.attachmentUrl || '',
+      record.pdfNotesUrl || ''
     ]);
 
     // Sort datewise (newest date first, then Class, then Subject)
@@ -2034,12 +2048,12 @@ function saveHomeworkInSheet(record) {
       return a[3].localeCompare(b[3]);
     });
 
-    var header = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType'];
+    var header = ['HomeworkID', 'Date', 'Class', 'Subject', 'TeacherName', 'TeacherPhone', 'Description', 'UpdatedAt', 'HomeworkType', 'VideoLink', 'TeacherNote', 'AttachmentUrl', 'PdfNotesUrl'];
     var allRows = [header].concat(items);
     hwSheet.clearContents();
     hwSheet.getRange('B:B').setNumberFormat('@');
     hwSheet.getRange('H:H').setNumberFormat('@');
-    hwSheet.getRange(1, 1, allRows.length, 9).setValues(allRows);
+    hwSheet.getRange(1, 1, allRows.length, 13).setValues(allRows);
 
     return { status: 'success', id: finalId, message: 'Homework saved datewise to Google Sheet.' };
   } catch (err) {
@@ -2159,6 +2173,34 @@ function generateHomeworkPdfInDrive(payload) {
     var pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view?usp=drivesdk';
 
     return { status: 'success', pdfUrl: pdfUrl, fileName: fileName };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
+function uploadHomeworkFileToDrive(payload) {
+  try {
+    var fileName = (payload.fileName || ('homework_' + new Date().getTime())).toString();
+    var contentType = (payload.contentType || 'application/octet-stream').toString();
+    var base64Data = (payload.base64Data || '').toString();
+    if (base64Data.indexOf(',') !== -1) {
+      base64Data = base64Data.split(',')[1];
+    }
+    if (!base64Data) {
+      return { status: 'error', message: 'Empty file data.' };
+    }
+
+    var bytes = Utilities.base64Decode(base64Data);
+    var blob = Utilities.newBlob(bytes, contentType, fileName);
+
+    var rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+    var subFolders = rootFolder.getFoldersByName('Daily Homework Attachments');
+    var targetFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder('Daily Homework Attachments');
+
+    var file = targetFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var url = 'https://drive.google.com/file/d/' + file.getId() + '/view?usp=drivesdk';
+    return { status: 'success', url: url, fileName: file.getName() };
   } catch (err) {
     return { status: 'error', message: err.message };
   }
