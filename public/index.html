@@ -157,6 +157,22 @@
       </button>
     </nav>
 
+    <!-- Homework Sub-Navigation -->
+    <nav id="homeworkSubNav" class="tabs-navigation" style="display: none;" aria-label="Homework Navigation">
+      <button type="button" class="tab-button hw-tab-button active" data-hw-tab="add" onclick="switchHomeworkSubTab('add')">
+        <i class="fas fa-plus-circle"></i>
+        <span>Add / Update</span>
+      </button>
+      <button type="button" class="tab-button hw-tab-button" data-hw-tab="submitted" onclick="switchHomeworkSubTab('submitted')">
+        <i class="fas fa-list-check"></i>
+        <span>Submitted</span>
+      </button>
+      <button type="button" class="tab-button hw-tab-button" id="hwClassTeacherNavBtn" data-hw-tab="send" onclick="switchHomeworkSubTab('send')" style="display: none;">
+        <i class="fab fa-whatsapp"></i>
+        <span>Class Teacher Send</span>
+      </button>
+    </nav>
+
     <main class="app-main">
       <!-- Upload Tab -->
       <div id="uploadTab" class="tab-content active">
@@ -629,18 +645,19 @@
             <p class="page-subtitle">Add homework for your assigned classes &amp; subjects, or send consolidated class homework to WhatsApp</p>
           </div>
 
-          <div class="card">
-            <div class="card-title"><i class="fas fa-id-badge"></i> Teacher Profile &amp; Assigned Classes / Subjects</div>
-            <div id="hwTeacherProfileBox">
-              <div class="loading-recent">
-                <div class="spinner"></div>
-                <p>Loading your classes &amp; subjects...</p>
+          <div id="hwSectionAdd">
+            <div class="card">
+              <div class="card-title"><i class="fas fa-id-badge"></i> Teacher Profile &amp; Assigned Classes / Subjects</div>
+              <div id="hwTeacherProfileBox">
+                <div class="loading-recent">
+                  <div class="spinner"></div>
+                  <p>Loading your classes &amp; subjects...</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="card">
-            <div class="card-title"><i class="fas fa-plus-circle"></i> Add / Update Subject Homework</div>
+            <div class="card">
+              <div class="card-title"><i class="fas fa-plus-circle"></i> Add / Update Subject Homework</div>
             <div class="form-row">
               <div class="form-col">
                 <div class="form-group">
@@ -749,16 +766,28 @@
                 <i class="fas fa-redo"></i> Reset
               </button>
             </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title"><i class="fas fa-list-check"></i> Submitted Homework for Selected Date</div>
-            <div id="hwMyListContainer">
-              <p style="color: #64748b;">Select a date to view submitted homework.</p>
             </div>
           </div>
 
-          <div class="card" id="hwClassTeacherCard" style="display: none; border: 2px solid rgba(34, 197, 94, 0.35);">
+          <div id="hwSectionSubmitted" style="display: none;">
+            <div class="card">
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span><i class="fas fa-list-check"></i> Submitted Homework for Selected Date</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="date" id="hwSubmittedDate" onchange="syncHomeworkDate(this.value)" style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.85rem;">
+                  <button type="button" class="btn-secondary" style="padding: 6px 10px; font-size: 0.85rem;" onclick="loadMyHomeworkList()">
+                    <i class="fas fa-sync-alt"></i>
+                  </button>
+                </div>
+              </div>
+              <div id="hwMyListContainer">
+                <p style="color: #64748b;">Select a date to view submitted homework.</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="hwSectionSend" style="display: none;">
+            <div class="card" id="hwClassTeacherCard" style="border: 2px solid rgba(34, 197, 94, 0.35);">
             <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
               <span><i class="fab fa-whatsapp" style="color: #16a34a;"></i> Class Teacher: Consolidated Homework (One Message)</span>
               <span id="hwCtSubjectCount" class="assigned-class-badge" style="background: rgba(34,197,94,0.12); color: #15803d;">0 subjects submitted</span>
@@ -795,6 +824,7 @@
               <button type="button" class="btn-secondary" onclick="loadConsolidatedHomework()">
                 <i class="fas fa-sync-alt"></i> Refresh
               </button>
+            </div>
             </div>
           </div>
         </div>
