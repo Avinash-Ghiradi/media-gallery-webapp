@@ -143,6 +143,18 @@
         <i class="fas fa-users-cog"></i>
         <span>Users</span>
       </button>
+      <button class="tab-button" onclick="switchTab('homework')">
+        <i class="fas fa-book-open"></i>
+        <span>Homework</span>
+      </button>
+      <button class="tab-button" onclick="switchTab('exams')">
+        <i class="fas fa-file-alt"></i>
+        <span>Exams</span>
+      </button>
+      <button class="tab-button" onclick="switchTab('timetable')">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Timetable</span>
+      </button>
     </nav>
 
     <main class="app-main">
@@ -608,6 +620,232 @@
           </div>
         </div>
       </div>
+
+      <!-- Homework Tab -->
+      <div id="homeworkTab" class="tab-content">
+        <div class="content">
+          <div class="page-heading">
+            <h1><i class="fas fa-book-open"></i> Daily Homework Diary</h1>
+            <p class="page-subtitle">Add class homework, create batches, and send formatted notices on WhatsApp</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-plus-circle"></i> Add Daily Homework</div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwClass">Class</label>
+                  <select id="hwClass"></select>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwSubject">Subject</label>
+                  <select id="hwSubject"></select>
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwType">Homework Type</label>
+                  <select id="hwType">
+                    <option value="Writing">Writing</option>
+                    <option value="Reading">Reading</option>
+                    <option value="Exam Syllabus &amp; Pattern">Exam Syllabus &amp; Pattern</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwDate">Date</label>
+                  <input type="date" id="hwDate">
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="hwAssignment">Assignment Details *</label>
+              <textarea id="hwAssignment" rows="3" placeholder="Enter homework details..." style="width:100%; padding:0.75rem; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-family:inherit;"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwVideoLink">Video Link (Optional)</label>
+                  <input type="url" id="hwVideoLink" placeholder="https://...">
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="hwTeacherNote">Teacher Note (Optional)</label>
+                  <input type="text" id="hwTeacherNote" placeholder="Special instruction...">
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn-primary" onclick="submitHomeworkForm()">
+              <i class="fas fa-save"></i> Save Homework
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fab fa-whatsapp"></i> Create Batch &amp; Send to Parents</div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="batchClass">Class</label>
+                  <select id="batchClass"></select>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="batchDate">Date</label>
+                  <input type="date" id="batchDate">
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="batchTeacherCode">Class Teacher / Principal Code *</label>
+                  <input type="password" id="batchTeacherCode" placeholder="Enter teacher code or PRINCIPAL2026">
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="batchGroupSelect">WhatsApp Group (Optional)</label>
+                  <select id="batchGroupSelect"></select>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="batchNotice">School / Class Notice (Optional)</label>
+              <textarea id="batchNotice" rows="2" placeholder="Optional notice to include with homework..." style="width:100%; padding:0.75rem; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-family:inherit;"></textarea>
+            </div>
+            <button type="button" class="btn-whatsapp" onclick="submitCreateAndSendBatch()" style="width: 100%;">
+              <i class="fab fa-whatsapp"></i> Create Batch &amp; Open WhatsApp
+            </button>
+            <div id="batchPreviewBox" style="display:none; margin-top: 1rem;">
+              <textarea id="batchPreviewText" readonly rows="6" style="width:100%; padding:0.75rem; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; background:#f8fafc;"></textarea>
+              <button type="button" class="btn-secondary" style="margin-top:0.5rem;" onclick="copyBatchPreviewMessage()">
+                <i class="fas fa-copy"></i> Copy WhatsApp Message
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+              <span><i class="fas fa-history"></i> Homework History &amp; Batches</span>
+              <button type="button" class="btn-secondary" style="width:auto; padding:0.4rem 0.85rem; font-size:0.8rem;" onclick="loadHomeworkModule()">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+            <div id="homeworkListContainer"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exams Tab -->
+      <div id="examsTab" class="tab-content">
+        <div class="content">
+          <div class="page-heading">
+            <h1><i class="fas fa-file-alt"></i> Examination Blueprints</h1>
+            <p class="page-subtitle">Create question paper blueprints, syllabus notices, and share via WhatsApp</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-plus-circle"></i> Create Exam Blueprint</div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="examTitleInput">Exam Name *</label>
+                  <input type="text" id="examTitleInput" placeholder="e.g., FA-1 / SA-1">
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="examClassSelect">Class *</label>
+                  <select id="examClassSelect"></select>
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="examSubjectSelect">Subject *</label>
+                  <select id="examSubjectSelect"></select>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="examDateInput">Exam Date *</label>
+                  <input type="date" id="examDateInput">
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="examMaxMarks">Maximum Marks</label>
+                  <input type="number" id="examMaxMarks" value="25" min="1">
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-group">
+                  <label for="examDuration">Duration</label>
+                  <input type="text" id="examDuration" placeholder="e.g., 1 Hour 30 Mins">
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="examSyllabus">Syllabus</label>
+              <textarea id="examSyllabus" rows="2" placeholder="Enter chapters / syllabus..." style="width:100%; padding:0.75rem; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-family:inherit;"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Question Pattern</label>
+              <div id="examPatternRows" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
+              <button type="button" class="btn-secondary" style="margin-top:0.5rem; width:auto;" onclick="addExamPatternRow()">
+                <i class="fas fa-plus"></i> Add Question Type
+              </button>
+            </div>
+            <button type="button" class="btn-primary" onclick="submitExamBlueprint()">
+              <i class="fas fa-save"></i> Save Exam Blueprint
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-list"></i> Saved Exam Blueprints</div>
+            <div id="examsListContainer"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timetable Tab -->
+      <div id="timetableTab" class="tab-content">
+        <div class="content">
+          <div class="page-heading">
+            <h1><i class="fas fa-calendar-alt"></i> Live Class Status &amp; Timetable</h1>
+            <p class="page-subtitle">Real-time period tracker and weekly Mon–Sat class schedule</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+              <span><i class="fas fa-broadcast-tower"></i> Live School Status</span>
+              <button type="button" class="btn-secondary" style="width:auto; padding:0.4rem 0.85rem; font-size:0.8rem;" onclick="loadTimetableModule()">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+            <div id="liveSchoolStatusGrid" class="recent-folders-grid"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-table"></i> Weekly Class Timetable</div>
+            <div class="form-group">
+              <label for="timetableClassFilter">Select Class</label>
+              <select id="timetableClassFilter" onchange="loadTimetableModule()"></select>
+            </div>
+            <div id="weeklyTimetableContainer" style="overflow-x:auto;"></div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -797,5 +1035,6 @@
   </div>
 
   <script src="/js/app.js"></script>
+  <script src="/js/academic.js"></script>
 </body>
 </html>
