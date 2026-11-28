@@ -102,6 +102,12 @@ async function loadHomeworkProfile() {
   }
 }
 
+function toggleHwAdminSection(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 function renderTeacherProfileBox(profile) {
   const infoBox = document.getElementById('hwTeacherProfileBox');
   if (!infoBox) return;
@@ -114,6 +120,43 @@ function renderTeacherProfileBox(profile) {
     ? profile.assignedSubjects.map(s => `<span class="assigned-class-badge" style="background: rgba(16,185,129,0.12); color: #047857; margin: 2px 4px 2px 0; display: inline-block;">${escapeHwHtml(s)}</span>`).join('')
     : '<span style="color: var(--text-muted, #64748b);">No subjects assigned</span>';
 
+  if (profile.isAdmin) {
+    infoBox.innerHTML = `
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+        <div>
+          <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary, #0f172a);">
+            <i class="fas fa-user-tie" style="color: var(--primary, #4f46e5);"></i> ${escapeHwHtml(profile.teacherName)}
+            <span class="assigned-class-badge" style="margin-left: 8px;">Admin / All Access</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="toggleHwAdminSection('hwAdminCtDetails')">
+            <i class="fas fa-chalkboard-teacher"></i> Class Teacher Info
+          </button>
+          <button type="button" class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="toggleHwAdminSection('hwAdminClassesDetails')">
+            <i class="fas fa-layer-group"></i> Your Classes &amp; Subjects
+          </button>
+        </div>
+      </div>
+      <div id="hwAdminCtDetails" style="display: none; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #eef2ff; font-size: 0.88rem; color: #4338ca; font-weight: 600;">
+        <i class="fas fa-chalkboard-teacher"></i> Class Teacher of: ${(profile.classTeacherOf || []).map(escapeHwHtml).join(', ') || 'None'}
+      </div>
+      <div id="hwAdminClassesDetails" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+          <div>
+            <div style="font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">Your Classes</div>
+            <div>${classesHtml}</div>
+          </div>
+          <div>
+            <div style="font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">Your Subjects</div>
+            <div>${subjectsHtml}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   const ctHtml = (profile.classTeacherOf || []).length > 0
     ? `<div style="margin-top: 8px; font-size: 0.9rem; color: #4338ca; font-weight: 600;">
          <i class="fas fa-chalkboard-teacher"></i> Class Teacher of: ${profile.classTeacherOf.map(escapeHwHtml).join(', ')}
@@ -125,7 +168,6 @@ function renderTeacherProfileBox(profile) {
       <div>
         <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary, #0f172a);">
           <i class="fas fa-user-tie" style="color: var(--primary, #4f46e5);"></i> ${escapeHwHtml(profile.teacherName)}
-          ${profile.isAdmin ? '<span class="assigned-class-badge" style="margin-left: 8px;">Admin / All Access</span>' : ''}
         </div>
         ${ctHtml}
       </div>
