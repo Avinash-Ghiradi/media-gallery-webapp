@@ -8,6 +8,7 @@ const multer = require('multer');
 const config = require('./src/config');
 const auth = require('./src/auth');
 const googleService = require('./src/googleService');
+const homeworkService = require('./src/homeworkService');
 const videoWatermark = require('./src/videoWatermark');
 
 const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
@@ -399,6 +400,57 @@ app.get('/api/whatsapp/info/:eventName/:className', auth.requireAuth, async (req
   try {
     const { eventName, className } = req.params;
     const result = await googleService.getFolderInfoForWhatsApp(eventName, className);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+/* ==========================================================================
+   HOMEWORK & CLASS TEACHER CONSOLIDATION ROUTES (Protected)
+   ========================================================================== */
+
+app.get('/api/homework/profile', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await homeworkService.resolveTeacherProfile(req.session.user);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/homework/list', auth.requireAuth, async (req, res) => {
+  try {
+    const { date, className } = req.query;
+    const result = await homeworkService.listHomework(req.session.user, date, className);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.post('/api/homework/save', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await homeworkService.saveHomework(req.session.user, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.delete('/api/homework/:id', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await homeworkService.deleteHomework(req.session.user, req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+app.get('/api/homework/consolidated', auth.requireAuth, async (req, res) => {
+  try {
+    const { date, className } = req.query;
+    const result = await homeworkService.getConsolidatedHomework(req.session.user, date, className);
     res.json(result);
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
