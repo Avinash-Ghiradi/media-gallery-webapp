@@ -623,12 +623,15 @@ async function loadConsolidatedHomework() {
   const date = (document.getElementById('hwCtDate') || {}).value || getTodayIsoDate();
   const className = (document.getElementById('hwCtClassSelect') || {}).value || '';
   const previewEl = document.getElementById('hwConsolidatedPreview');
+  const loadingScreen = document.getElementById('hwPdfLoadingScreen');
   const groupInfoEl = document.getElementById('hwCtGroupInfo');
   const countEl = document.getElementById('hwCtSubjectCount');
 
   if (!className || !previewEl) return;
 
-  previewEl.value = 'Generating PDF & loading consolidated homework...';
+  if (loadingScreen) loadingScreen.style.display = 'flex';
+  previewEl.style.display = 'none';
+  previewEl.value = '';
   try {
     const res = await apiCall(`/api/homework/consolidated?date=${encodeURIComponent(date)}&className=${encodeURIComponent(className)}`);
     if (!res || res.status !== 'success') {
@@ -658,6 +661,9 @@ async function loadConsolidatedHomework() {
   } catch (err) {
     console.error('loadConsolidatedHomework error:', err);
     previewEl.value = 'Error loading consolidated homework.';
+  } finally {
+    if (loadingScreen) loadingScreen.style.display = 'none';
+    previewEl.style.display = 'block';
   }
 }
 
