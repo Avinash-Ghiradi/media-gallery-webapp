@@ -972,10 +972,53 @@ async function uploadHomeworkAttachment(payload) {
   return { status: 'error', message: (gasRes && gasRes.message) || 'Failed to upload homework file.' };
 }
 
+async function getHomeworkHistory(sessionUser, filters = {}) {
+  const profile = await resolveTeacherProfile(sessionUser);
+  const { items, source } = await readAllHomework();
+
+  const fromDate = filters.fromDate ? normalizeDateStr(filters.fromDate) : '';
+  const toDate = filters.toDate ? normalizeDateStr(filters.toDate) : '';
+  const className = (filters.className || '').trim().toLowerCase();
+  const subject = (filters.subject || '').trim().toLowerCase();
+  const search = (filters.search || '').trim().toLowerCase();
+
+  const filtered = items
+    .filter(item => {
+      if (!item.date) return false;
+      if (!profile.isAdmin) {
+        const inAssignedClass = profile.assignedClasses.some(c => c.toLowerCase() === item.className.toLowerCase());
+        const isClassTeacherClass = profile.classTeacherOf.some(c => c.toLowerCase() === item.className.toLowerCase());
+        if (!inAssignedClass && !isClassTeacherClass) return false;
+      }
+      if (fromDate && item.date < fromDate) return false;
+      if (toDate && item.date > toDate) return false;
+      if (className && item.className.toLowerCase() !== className) return false;
+      if (subject && item.subject.toLowerCase() !== subject) return false;
+      if (search) {
+        const hay = `${item.className} ${item.subject} ${item.description} ${item.teacherName} ${item.teacherNote || ''} ${item.homeworkType || ''}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      const clsCmp = a.className.localeCompare(b.className);
+      if (clsCmp !== 0) return clsCmp;
+      return a.subject.localeCompare(b.subject);
+    })
+    .map(item => ({
+      ...item,
+      friendlyDate: formatDateWithWeekday(item.date)
+    }));
+
+  return { status: 'success', source, items: filtered };
+}
+
 module.exports = {
   ensureHomeworkSheets,
   resolveTeacherProfile,
   listHomework,
+  getHomeworkHistory,
   saveHomework,
   deleteHomework,
   getConsolidatedHomework,
