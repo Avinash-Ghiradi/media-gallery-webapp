@@ -89,29 +89,33 @@ function checkAuthStatus(req) {
       username: user.username,
       fullName: user.fullName || '',
       assignedClass: user.assignedClass || '',
+      assignedClasses: user.assignedClasses || '',
+      assignedSubjects: user.assignedSubjects || '',
       photoUrl: user.photoUrl || '',
       details: user.details || '',
       mustChangePassword: !!user.mustChangePassword,
       timestamp: now
     };
   }
-  return { isAuthenticated: false, username: '', fullName: '', assignedClass: '', photoUrl: '', details: '', mustChangePassword: false, timestamp: null };
+  return { isAuthenticated: false, username: '', fullName: '', assignedClass: '', assignedClasses: '', assignedSubjects: '', photoUrl: '', details: '', mustChangePassword: false, timestamp: null };
 }
 
 /**
- * Normalize user record from either { password, assignedClass, photoUrl, details, fullName } or legacy string password
+ * Normalize user record from either { password, assignedClass, photoUrl, details, fullName, assignedClasses, assignedSubjects } or legacy string password
  */
 function parseUserRecord(entry) {
   if (entry && typeof entry === 'object') {
     return {
       password: entry.password || '',
       assignedClass: entry.assignedClass || '',
+      assignedClasses: entry.assignedClasses || '',
+      assignedSubjects: entry.assignedSubjects || '',
       photoUrl: entry.photoUrl || '',
       details: entry.details || '',
       fullName: entry.fullName || ''
     };
   }
-  return { password: entry || '', assignedClass: '', photoUrl: '', details: '', fullName: '' };
+  return { password: entry || '', assignedClass: '', assignedClasses: '', assignedSubjects: '', photoUrl: '', details: '', fullName: '' };
 }
 
 /**
@@ -132,6 +136,8 @@ async function authenticateUser(req, password, inputUsername = '') {
           username: username,
           fullName: record.fullName,
           assignedClass: record.assignedClass,
+          assignedClasses: record.assignedClasses,
+          assignedSubjects: record.assignedSubjects,
           photoUrl: record.photoUrl,
           details: record.details,
           mustChangePassword: mustChangePassword,
@@ -143,6 +149,8 @@ async function authenticateUser(req, password, inputUsername = '') {
           username: username,
           fullName: record.fullName,
           assignedClass: record.assignedClass,
+          assignedClasses: record.assignedClasses,
+          assignedSubjects: record.assignedSubjects,
           photoUrl: record.photoUrl,
           details: record.details,
           mustChangePassword: mustChangePassword,
