@@ -245,6 +245,100 @@ body {
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
 }
 
+/* Beautiful PDF Generation Animation Screen */
+.hw-pdf-loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem 1.25rem;
+  border-radius: 14px;
+  border: 1.5px dashed rgba(79, 70, 229, 0.35);
+  background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #ecfdf5 100%);
+  margin-bottom: 0.5rem;
+}
+
+.hw-pdf-logo-orbit {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.hw-pdf-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(79, 70, 229, 0.16);
+  border-top-color: #4f46e5;
+  border-right-color: #16a34a;
+  animation: hwPdfSpin 1s linear infinite;
+}
+
+.hw-pdf-logo-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 4px;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.18);
+  animation: hwPdfPulse 1.6s ease-in-out infinite;
+}
+
+.hw-pdf-loading-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin-bottom: 0.3rem;
+}
+
+.hw-pdf-loading-title i {
+  color: #dc2626;
+  margin-right: 4px;
+}
+
+.hw-pdf-loading-sub {
+  font-size: 0.82rem;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+
+.hw-pdf-progress-track {
+  width: 100%;
+  max-width: 260px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.14);
+  overflow: hidden;
+}
+
+.hw-pdf-progress-bar {
+  width: 45%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4f46e5, #16a34a, #4f46e5);
+  animation: hwPdfSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes hwPdfSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hwPdfPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes hwPdfSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(240%); }
+}
+
 .tabs-navigation {
   display: flex;
   background: var(--light-gray);
