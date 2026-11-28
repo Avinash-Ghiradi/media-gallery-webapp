@@ -239,8 +239,8 @@ body {
 }
 
 .section-switch-btn.active {
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  color: var(--white);
+  background: linear-gradient(135deg, var(--primary, #4f46e5), var(--primary-hover, #4338ca));
+  color: #ffffff;
   border-color: transparent;
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
 }
