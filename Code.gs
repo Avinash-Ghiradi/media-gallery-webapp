@@ -2096,15 +2096,32 @@ function generateHomeworkPdfInDrive(payload) {
     var tomorrowPeriods = payload.tomorrowPeriods || [];
     var tomorrowDayLabel = (payload.tomorrowDayLabel || "Tomorrow's Timetable").toString();
 
+    var logoDataUri = '';
+    try {
+      var branding = getBrandingFromSheet();
+      var logoUrl = (branding && (branding.photoLogoUrl || branding.appLogoUrl)) || 'https://lh3.googleusercontent.com/d/1AviNbKi5ho_GHCTkA1ugcCu49l2cE62F';
+      var logoIdMatch = String(logoUrl).match(/[-\w]{25,}/);
+      if (logoIdMatch) {
+        var logoBlob = DriveApp.getFileById(logoIdMatch[0]).getBlob();
+        logoDataUri = 'data:' + (logoBlob.getContentType() || 'image/png') + ';base64,' + Utilities.base64Encode(logoBlob.getBytes());
+      } else if (/^https?:\/\//i.test(logoUrl)) {
+        var resp = UrlFetchApp.fetch(logoUrl, { muteHttpExceptions: true });
+        if (resp.getResponseCode() === 200) {
+          var fetchedBlob = resp.getBlob();
+          logoDataUri = 'data:' + (fetchedBlob.getContentType() || 'image/png') + ';base64,' + Utilities.base64Encode(fetchedBlob.getBytes());
+        }
+      }
+    } catch (logoErr) {}
+
     var rowsHtml = '';
     if (items.length === 0) {
-      rowsHtml = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:16px;">No homework entries recorded for this date.</td></tr>';
+      rowsHtml = '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:18px;">No homework entries recorded for this date.</td></tr>';
     } else {
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
         var extrasHtml = '';
         if (it.teacherNote) {
-          extrasHtml += '<div style="margin-top:6px;padding:5px 8px;background:#fefce8;border-left:3px solid #eab308;font-size:11.5px;color:#713f12;"><strong>Note:</strong> ' + escapeHtmlGAS(it.teacherNote) + '</div>';
+          extrasHtml += '<div style="margin-top:6px;padding:5px 8px;background:#fefce8;border-left:3px solid #d97706;font-size:11.5px;color:#713f12;"><strong>Note:</strong> ' + escapeHtmlGAS(it.teacherNote) + '</div>';
         }
         if (it.videoLink) {
           extrasHtml += '<div style="margin-top:5px;font-size:11.5px;"><strong>Video Link:</strong> <a href="' + escapeHtmlGAS(it.videoLink) + '" style="color:#dc2626;">' + escapeHtmlGAS(it.videoLink) + '</a></div>';
@@ -2129,10 +2146,14 @@ function generateHomeworkPdfInDrive(payload) {
           }
         }
         rowsHtml += '<tr>' +
-          '<td style="text-align:center;font-weight:bold;">' + (i + 1) + '</td>' +
-          '<td><strong>' + escapeHtmlGAS(it.subject) + '</strong><br><span style="font-size:11px;color:#4f46e5;">Type: ' + escapeHtmlGAS(it.homeworkType || 'Writing') + '</span></td>' +
-          '<td style="white-space:pre-wrap;">' + escapeHtmlGAS(it.description) + extrasHtml + '</td>' +
-          '<td>' + escapeHtmlGAS(it.teacherName || '') + '</td>' +
+          '<td style="width:34px;font-weight:700;color:#92400e;font-size:13px;vertical-align:top;">' + (i + 1) + '</td>' +
+          '<td style="vertical-align:top;">' +
+            '<div style="font-family:Georgia,serif;font-weight:700;font-size:14px;color:#0f172a;">' + escapeHtmlGAS(it.subject) + '</div>' +
+            '<div style="font-size:11.5px;color:#1d4ed8;font-weight:600;margin:3px 0 5px 0;">&#128221; Type: ' + escapeHtmlGAS(it.homeworkType || 'Writing') + '</div>' +
+            '<div style="white-space:pre-wrap;color:#334155;font-size:12.5px;line-height:1.45;">' + escapeHtmlGAS(it.description) + '</div>' +
+            extrasHtml +
+          '</td>' +
+          '<td style="width:140px;color:#475569;font-size:12px;vertical-align:top;">' + escapeHtmlGAS(it.teacherName || '') + '</td>' +
           '</tr>';
       }
     }
@@ -2140,9 +2161,9 @@ function generateHomeworkPdfInDrive(payload) {
     var ttHtml = '';
     if (tomorrowPeriods && tomorrowPeriods.length > 0) {
       var ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
-      ttHtml += '<div style="margin-top:18px;border:1px solid #cbd5e1;border-radius:8px;padding:12px;background:#f8fafc;">' +
-        '<h3 style="margin:0 0 8px 0;font-size:14px;color:#1e293b;">' + escapeHtmlGAS(tomorrowDayLabel) + '</h3>' +
-        '<div style="font-size:12px;line-height:1.6;">';
+      ttHtml += '<div style="margin-top:18px;border:1px solid #e2e8f0;border-radius:8px;padding:12px;background:#f8fafc;">' +
+        '<div style="font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">' + escapeHtmlGAS(tomorrowDayLabel) + '</div>' +
+        '<div style="font-size:12px;line-height:1.6;color:#334155;">';
       for (var p = 0; p < tomorrowPeriods.length; p++) {
         var label = (ordinals[p] || ((p + 1) + 'th')) + ' Period';
         ttHtml += '<div><strong>' + label + ':</strong> ' + escapeHtmlGAS(tomorrowPeriods[p]) + '</div>';
@@ -2150,28 +2171,45 @@ function generateHomeworkPdfInDrive(payload) {
       ttHtml += '</div></div>';
     }
 
+    var shortDate = friendlyDate ? String(friendlyDate).replace(/^[A-Za-z]+,\s*/, '').toUpperCase() : dateIso;
+    var logoImgHtml = logoDataUri
+      ? '<img src="' + logoDataUri + '" style="width:62px;height:62px;object-fit:contain;border-radius:50%;border:1px solid #e2e8f0;" />'
+      : '';
+
     var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
-      'body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:24px;}' +
-      '.header{text-align:center;border-bottom:3px solid #4f46e5;padding-bottom:12px;margin-bottom:16px;}' +
-      '.school{font-size:22px;font-weight:bold;color:#1e1b4b;letter-spacing:0.5px;}' +
-      '.tagline{font-size:12px;color:#475569;font-style:italic;margin-top:2px;}' +
-      '.addr{font-size:11px;color:#64748b;margin-top:4px;}' +
-      '.meta{display:flex;justify-content:space-between;background:#eef2ff;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px;}' +
-      'table{width:100%;border-collapse:collapse;font-size:12.5px;}' +
-      'th{background:#4f46e5;color:#fff;padding:8px 10px;text-align:left;}' +
-      'td{border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top;}' +
-      '.footer{margin-top:24px;display:flex;justify-content:space-between;font-size:12px;color:#475569;}' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:26px 30px;}' +
+      '.header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0f172a;padding-bottom:12px;margin-bottom:12px;}' +
+      '.school{font-family:Georgia,serif;font-size:24px;font-weight:bold;color:#0f172a;line-height:1.15;}' +
+      '.tagline{font-size:11px;color:#92400e;letter-spacing:1.2px;text-transform:uppercase;margin-top:3px;font-weight:600;}' +
+      '.addr{font-size:11px;color:#475569;margin-top:3px;}' +
+      '.subbar{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:700;color:#92400e;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px;}' +
+      '.meta-box{display:flex;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:18px;overflow:hidden;}' +
+      '.meta-col{flex:1;padding:10px 14px;}' +
+      '.meta-col + .meta-col{border-left:1px solid #cbd5e1;}' +
+      '.meta-label{font-size:10px;font-weight:700;color:#92400e;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:3px;}' +
+      '.meta-val{font-size:14px;color:#0f172a;font-weight:500;}' +
+      'table{width:100%;border-collapse:collapse;}' +
+      'th{font-size:10.5px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:left;}' +
+      'td{padding:12px 6px;border-bottom:1px solid #e2e8f0;}' +
+      '.footer{margin-top:26px;display:flex;justify-content:space-between;font-size:12px;color:#475569;}' +
       '</style></head><body>' +
       '<div class="header">' +
-      '<div class="school">SUCCESS SCHOOL INDI</div>' +
-      '<div class="tagline">Education for Excellence</div>' +
-      '<div class="addr">#Bhyavanti Nagar, Indi, Karnataka &bull; +91 99648 82070</div>' +
+        (logoImgHtml ? '<div>' + logoImgHtml + '</div>' : '') +
+        '<div>' +
+          '<div class="school">Success School Indi</div>' +
+          '<div class="tagline">EDUCATION FOR EXCELLENCE</div>' +
+          '<div class="addr">#Bhyavanti Nagar, Indi, Karnataka &bull; +91 99648 82070</div>' +
+        '</div>' +
       '</div>' +
-      '<div class="meta">' +
-      '<div><strong>Daily Homework Notice</strong> &mdash; <strong>Class:</strong> ' + escapeHtmlGAS(className) + '</div>' +
-      '<div><strong>Date:</strong> ' + escapeHtmlGAS(friendlyDate) + ' &bull; <strong>Subjects:</strong> ' + items.length + '</div>' +
+      '<div class="subbar">' +
+        '<div>DAILY HOMEWORK ASSIGNMENT</div>' +
+        '<div>' + escapeHtmlGAS(shortDate) + '</div>' +
       '</div>' +
-      '<table><thead><tr><th style="width:40px;text-align:center;">#</th><th style="width:150px;">Subject &amp; Type</th><th>Homework Details</th><th style="width:140px;">Teacher</th></tr></thead>' +
+      '<div class="meta-box">' +
+        '<div class="meta-col"><div class="meta-label">CLASS</div><div class="meta-val">' + escapeHtmlGAS(className) + '</div></div>' +
+        '<div class="meta-col"><div class="meta-label">TOTAL SUBJECTS</div><div class="meta-val">' + items.length + '</div></div>' +
+      '</div>' +
+      '<table><thead><tr><th style="width:34px;">#</th><th>SUBJECT &amp; ASSIGNMENT</th><th style="width:140px;">TEACHER</th></tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody></table>' +
       ttHtml +
       '<div class="footer">' +
