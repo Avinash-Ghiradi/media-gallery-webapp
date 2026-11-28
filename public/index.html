@@ -680,15 +680,65 @@
               </div>
             </div>
             <div class="form-group">
-              <label for="hwDescription">Homework Details</label>
-              <textarea id="hwDescription" rows="3" placeholder="Enter today's homework for this class and subject..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+              <label>Homework Details</label>
+              <div id="hwItemsList">
+                <div class="hw-item-row" style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+                  <span class="hw-item-num" style="font-weight: 700; padding-top: 10px; min-width: 20px; color: #334155;">1.</span>
+                  <textarea class="hw-item-input" rows="2" placeholder="Enter homework 1..." style="flex: 1; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+                </div>
+              </div>
+              <button type="button" class="btn-secondary" onclick="addHomeworkItemRow()" style="width: 100%; border: 1.5px dashed #94a3b8; background: #f8fafc; justify-content: center; margin-top: 4px;">
+                <i class="fas fa-plus"></i> Add Another Homework
+              </button>
             </div>
+
+            <div class="form-group">
+              <label for="hwVideoLink">Video Link <span style="font-weight: 400; color: #64748b;">(optional &mdash; YouTube or other video URL)</span></label>
+              <input type="url" id="hwVideoLink" placeholder="https://www.youtube.com/watch?v=..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;">
+            </div>
+
+            <div class="form-group">
+              <label for="hwTeacherNote">Subject Teacher Note <span style="font-weight: 400; color: #64748b;">(optional)</span></label>
+              <textarea id="hwTeacherNote" rows="2" placeholder="Any special instructions or notes from the subject teacher..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-family: inherit; font-size: 0.95rem;"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Attachment <span style="font-weight: 400; color: #64748b;">(optional &mdash; take photo or upload image)</span></label>
+              <div style="border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 16px; text-align: center; background: #fafaf9;">
+                <div style="font-size: 1.8rem; margin-bottom: 4px;">📸</div>
+                <div style="font-weight: 600; color: #1e293b; font-size: 0.95rem;">Tap to take photo or upload image</div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 12px;">Camera or Gallery</div>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                  <button type="button" class="btn-primary" style="background: #0f172a;" onclick="document.getElementById('hwCameraInput').click()">
+                    <i class="fas fa-camera"></i> Camera
+                  </button>
+                  <button type="button" class="btn-secondary" onclick="document.getElementById('hwGalleryInput').click()">
+                    <i class="fas fa-folder-open"></i> Gallery
+                  </button>
+                </div>
+                <input type="file" id="hwCameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleHomeworkImageSelect(this)">
+                <input type="file" id="hwGalleryInput" accept="image/*" style="display: none;" onchange="handleHomeworkImageSelect(this)">
+                <div id="hwImagePreviewBox" style="display: none; margin-top: 12px;"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>PDF Notes <span style="font-weight: 400; color: #64748b;">(optional &mdash; upload PDF study material)</span></label>
+              <div onclick="document.getElementById('hwPdfInput').click()" style="border: 1.5px solid #334155; border-radius: 12px; padding: 18px; text-align: center; background: #fafaf9; cursor: pointer;">
+                <div style="font-size: 1.8rem; color: #64748b; margin-bottom: 4px;"><i class="fas fa-file-pdf"></i></div>
+                <div style="font-weight: 600; color: #1e293b; font-size: 0.95rem;">Tap to upload PDF notes</div>
+                <div style="font-size: 0.8rem; color: #64748b;">PDF files only (Max 10MB)</div>
+              </div>
+              <input type="file" id="hwPdfInput" accept="application/pdf" style="display: none;" onchange="handleHomeworkPdfSelect(this)">
+              <div id="hwPdfPreviewBox" style="display: none; margin-top: 10px;"></div>
+            </div>
+
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <button type="button" class="btn-primary" id="hwSaveBtn" onclick="saveTeacherHomework()">
+              <button type="button" class="btn-primary" id="hwSaveBtn" style="flex: 1; justify-content: center; background: #0f172a;" onclick="saveTeacherHomework()">
                 <i class="fas fa-save"></i> Save Homework
               </button>
-              <button type="button" class="btn-secondary" onclick="loadMyHomeworkList()">
-                <i class="fas fa-sync-alt"></i> Refresh
+              <button type="button" class="btn-secondary" style="flex: 1; justify-content: center;" onclick="resetHomeworkForm()">
+                <i class="fas fa-redo"></i> Reset
               </button>
             </div>
           </div>
