@@ -115,6 +115,8 @@ function doPost(e) {
       res = generateHomeworkPdfInDrive(contents);
     } else if (action === 'uploadHomeworkFile') {
       res = uploadHomeworkFileToDrive(contents);
+    } else if (action === 'markHomeworkSent') {
+      res = markHomeworkSentInSheet(contents);
     } else if (action === 'authenticateUser') {
       res = authenticateUser(contents.password);
     } else {
@@ -1890,7 +1892,20 @@ function ensureHomeworkSheetsGAS() {
   }
   hwSheet.getRange('B:B').setNumberFormat('@');
   hwSheet.getRange('H:H').setNumberFormat('@');
-  return { ss: ss, wgSheet: wgSheet, hwSheet: hwSheet };
+
+  var sentSheet = ss.getSheetByName('HomeworkSentLog');
+  if (!sentSheet) {
+    sentSheet = ss.insertSheet('HomeworkSentLog');
+  }
+  if (sentSheet.getLastRow() === 0) {
+    sentSheet.getRange(1, 1, 1, 6).setValues([
+      ['Date', 'Class', 'ClassTeacher', 'SentAt', 'SubjectsCount', 'PdfUrl']
+    ]);
+  }
+  sentSheet.getRange('A:A').setNumberFormat('@');
+  sentSheet.getRange('D:D').setNumberFormat('@');
+
+  return { ss: ss, wgSheet: wgSheet, hwSheet: hwSheet, sentSheet: sentSheet };
 }
 
 function getHomeworkBundle() {
@@ -1972,13 +1987,31 @@ function getHomeworkBundle() {
       }
     }
 
+    var sentData = sheetsObj.sentSheet.getDataRange().getValues();
+    var sentLogs = [];
+    for (var sl = 1; sl < sentData.length; sl++) {
+      var sr = sentData[sl];
+      if (!sr[0] && !sr[1]) continue;
+      sentLogs.push({
+        date: formatHwDateValue(sr[0]),
+        className: sr[1] ? sr[1].toString().trim() : '',
+        classTeacher: sr[2] ? sr[2].toString().trim() : '',
+        sentAt: (Object.prototype.toString.call(sr[3]) === '[object Date]' && !isNaN(sr[3].getTime()))
+          ? Utilities.formatDate(sr[3], 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss')
+          : (sr[3] ? sr[3].toString().trim() : ''),
+        subjectsCount: sr[4] ? Number(sr[4]) : 0,
+        pdfUrl: sr[5] ? sr[5].toString().trim() : ''
+      });
+    }
+
     return {
       status: 'success',
       source: 'google-sheet',
       usersList: usersList,
       groups: groups,
       homework: homework,
-      timetable: timetable
+      timetable: timetable,
+      sentLogs: sentLogs
     };
   } catch (err) {
     return { status: 'error', message: err.message };
@@ -2265,6 +2298,33 @@ function uploadHomeworkFileToDrive(payload) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     var url = 'https://drive.google.com/file/d/' + file.getId() + '/view?usp=drivesdk';
     return { status: 'success', url: url, fileName: file.getName() };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
+function markHomeworkSentInSheet(payload) {
+  try {
+    var sheetsObj = ensureHomeworkSheetsGAS();
+    var sentSheet = sheetsObj.sentSheet;
+    var targetDate = formatHwDateValue(payload.date);
+    var targetClass = (payload.className || '').toString().trim();
+    var classTeacher = (payload.classTeacher || '').toString().trim();
+    var sentAt = (payload.sentAt || Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss') + ' IST').toString();
+    var subjectsCount = payload.subjectsCount || 0;
+    var pdfUrl = (payload.pdfUrl || '').toString().trim();
+
+    var data = sentSheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var d = formatHwDateValue(data[i][0]);
+      var c = data[i][1] ? data[i][1].toString().trim() : '';
+      if (d === targetDate && c.toLowerCase() === targetClass.toLowerCase()) {
+        sentSheet.getRange(i + 1, 1, 1, 6).setValues([[targetDate, targetClass, classTeacher, sentAt, subjectsCount, pdfUrl]]);
+        return { status: 'success', sentAt: sentAt };
+      }
+    }
+    sentSheet.appendRow([targetDate, targetClass, classTeacher, sentAt, subjectsCount, pdfUrl]);
+    return { status: 'success', sentAt: sentAt };
   } catch (err) {
     return { status: 'error', message: err.message };
   }
