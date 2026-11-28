@@ -148,17 +148,13 @@ function formatDateFriendly(dateStr) {
   if (!dateStr) return '';
   const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return String(dateStr);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${m[3]} ${months[parseInt(m[2], 10) - 1] || m[2]} ${m[1]}`;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 function formatDateWithWeekday(dateStr) {
   const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return String(dateStr || '');
-  const d = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${days[d.getUTCDay()]}, ${parseInt(m[3], 10)} ${months[parseInt(m[2], 10) - 1]} ${m[1]}`;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 function getNextSchoolDayName(dateStr) {
@@ -1132,6 +1128,15 @@ async function getDailyTrafficLights(sessionUser, date) {
       .filter(u => !submittedTeachers.includes(u))
       .map(u => u.fullName || u.username);
 
+    const expectedSubjects = uniqueList([
+      ...expectedTeachers.flatMap(u => splitCsv(u.subjects)),
+      ...classHw.map(hw => hw.subject)
+    ]);
+    const subjectStatuses = expectedSubjects.map(subj => ({
+      subject: subj,
+      submitted: classHw.some(hw => hw.subject.toLowerCase() === subj.toLowerCase())
+    }));
+
     let light = 'red';
     if (classHw.length === 0) {
       light = 'red';
@@ -1148,6 +1153,7 @@ async function getDailyTrafficLights(sessionUser, date) {
       expectedTeachersCount: expectedTeachers.length,
       submittedTeachersCount: submittedTeachers.length,
       pendingTeachers,
+      subjectStatuses,
       sentInfo,
       light
     };
