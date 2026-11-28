@@ -152,6 +152,25 @@ function formatDateFriendly(dateStr) {
   return `${m[3]} ${months[parseInt(m[2], 10) - 1] || m[2]} ${m[1]}`;
 }
 
+function formatDateWithWeekday(dateStr) {
+  const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(dateStr || '');
+  const d = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${days[d.getUTCDay()]}, ${parseInt(m[3], 10)} ${months[parseInt(m[2], 10) - 1]} ${m[1]}`;
+}
+
+function getNextSchoolDayName(dateStr) {
+  const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const d = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+  d.setUTCDate(d.getUTCDate() + 1);
+  if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1); // Skip Sunday -> Monday
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[d.getUTCDay()];
+}
+
 function readFallbackData() {
   try {
     if (fs.existsSync(FALLBACK_FILE)) {
@@ -459,6 +478,7 @@ function normalizeHwRow(r) {
     date: normalizeDateStr(r.date || r.homeworkdate || ''),
     className: r.class || r.classname || '',
     subject: r.subject || r.subjectname || '',
+    homeworkType: r.homeworktype || r.type || 'Writing',
     teacherName: r.teachername || r.teacher || r.createdby || '',
     teacherPhone: r.teacherphone || r.phone || '',
     description: r.description || r.homework || r.details || r.content || r.task || '',
@@ -516,6 +536,7 @@ function buildRowFromHeaders(headers, record) {
     if (key === 'date' || key === 'homeworkdate') return record.date;
     if (key === 'class' || key === 'classname') return record.className;
     if (key === 'subject' || key === 'subjectname') return record.subject;
+    if (key === 'homeworktype' || key === 'type') return record.homeworkType || 'Writing';
     if (key === 'teachername' || key === 'teacher' || key === 'createdby') return record.teacherName;
     if (key === 'teacherphone' || key === 'phone') return record.teacherPhone;
     if (key === 'description' || key === 'homework' || key === 'details' || key === 'content' || key === 'task') return record.description;
@@ -530,6 +551,7 @@ async function saveHomework(sessionUser, payload) {
   const date = normalizeDateStr(payload.date || todayIso());
   const className = (payload.className || '').trim();
   const subject = (payload.subject || '').trim();
+  const homeworkType = (payload.homeworkType || 'Writing').trim();
   const description = (payload.description || '').trim();
 
   if (!className || !subject || !description) {
@@ -550,6 +572,7 @@ async function saveHomework(sessionUser, payload) {
     date,
     className,
     subject,
+    homeworkType,
     teacherName: profile.teacherName,
     teacherPhone: profile.teacherPhone,
     description,
@@ -690,7 +713,7 @@ async function deleteHomework(sessionUser, homeworkId) {
   return { status: 'success', message: 'Homework deleted.' };
 }
 
-async function getConsolidatedHomework(sessionUser, date, className) {
+async function getConsolidatedHomework(sessionUser, date, className, pdfUrl = '') {
   const targetDate = normalizeDateStr(date || todayIso());
   const profile = await resolveTeacherProfile(sessionUser);
 
@@ -707,33 +730,93 @@ async function getConsolidatedHomework(sessionUser, date, className) {
     return { status: 'error', message: `You are not the Class Teacher for ${selectedClass}.` };
   }
 
-  const { items, source } = await readAllHomework();
-  const classItems = items.filter(
+  let timetableRows = [];
+  let hwItems = [];
+  let source = 'fallback';
+
+  if (config.gasWebAppUrl) {
+    const gasBundle = await callGasBridge('getHomeworkBundle');
+    if (gasBundle && gasBundle.status === 'success') {
+      source = 'google-sheet';
+      hwItems = (gasBundle.homework || []).map(x => ({ ...x, date: normalizeDateStr(x.date) }));
+      timetableRows = gasBundle.timetable || [];
+    }
+  }
+
+  if (source !== 'google-sheet') {
+    const res = await readAllHomework();
+    source = res.source;
+    hwItems = res.items || [];
+  }
+
+  const classItems = hwItems.filter(
     x => x.date === targetDate && x.className.toLowerCase() === selectedClass.toLowerCase()
   );
 
-  const friendlyDate = formatDateFriendly(targetDate);
+  // Find tomorrow's timetable for this class
+  const tomorrowDayName = getNextSchoolDayName(targetDate);
+  const ttMatch = timetableRows.find(t =>
+    t.className.toLowerCase() === selectedClass.toLowerCase() &&
+    t.day.toLowerCase().includes(tomorrowDayName.toLowerCase())
+  );
+  const tomorrowPeriods = ttMatch ? (ttMatch.periods || []) : [];
+
+  const friendlyDate = formatDateWithWeekday(targetDate);
+  const bar = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
   const lines = [
-    `📚 *${SCHOOL_NAME}*`,
-    `*Daily Homework — ${selectedClass}*`,
-    `📅 Date: ${friendlyDate}`,
+    `*${SCHOOL_NAME.toUpperCase()}*`,
+    '_Education for Excellence_',
+    bar,
+    '*📋 Daily Homework Notice*',
+    '',
+    `*🏫 Class:* ${selectedClass}`,
+    `*📅 Date:* ${friendlyDate}`,
+    `*📝 Subjects Today:* ${classItems.length}`,
+    bar,
     ''
   ];
 
   if (classItems.length === 0) {
     lines.push('_No subject homework submitted yet for this date._');
+    lines.push('');
   } else {
     classItems.forEach((item, idx) => {
-      lines.push(`*${idx + 1}. ${item.subject}:*`);
-      lines.push(item.description);
+      const hwType = item.homeworkType || 'Writing';
+      lines.push(`*${idx + 1}. ${item.subject}*`);
+      lines.push(`   📝 *Type:* ${hwType}`);
+      lines.push(`   📝 ${item.description}`);
       if (item.teacherName) {
-        lines.push(`_(${item.teacherName})_`);
+        lines.push(`   👨‍🏫 *Teacher:* ${item.teacherName}`);
       }
       lines.push('');
     });
   }
 
-  lines.push(`_Class Teacher: ${profile.teacherName}_`);
+  if (tomorrowPeriods.length > 0) {
+    const ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
+    lines.push('');
+    lines.push(`📅 *Tomorrow's Timetable*`);
+    lines.push(bar);
+    tomorrowPeriods.forEach((p, idx) => {
+      const label = `${ordinals[idx] || `${idx + 1}th`} Period`;
+      lines.push(`*${label}:* ${p}`);
+    });
+    lines.push(bar);
+  }
+
+  lines.push(bar);
+  lines.push('#Bhyavanti Nagar, Indi, Karnataka');
+  lines.push('📞 +91 99648 82070');
+  lines.push(bar);
+  lines.push('');
+  lines.push('📱 *Thank you*');
+  lines.push('──────────────────────────────────────────────────');
+
+  if (pdfUrl) {
+    lines.push('');
+    lines.push(`📎 *PDF Attachment:* ${pdfUrl}`);
+  }
+
   const formattedMessage = lines.join('\n').trim();
 
   const group = profile.groups.find(
@@ -746,18 +829,54 @@ async function getConsolidatedHomework(sessionUser, date, className) {
 
   const whatsappLink = phoneDigits
     ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(formattedMessage)}`
-    : `https://wa.me/?text=${encodeURIComponent(formattedMessage)}`;
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(formattedMessage)}`;
 
   return {
     status: 'success',
     source,
     date: targetDate,
+    friendlyDate,
     className: selectedClass,
     items: classItems,
+    tomorrowPeriods,
+    tomorrowDayLabel: tomorrowDayName ? `Tomorrow's Timetable (${tomorrowDayName})` : "Tomorrow's Timetable",
+    pdfUrl,
     formattedMessage,
     whatsappGroup: group,
     groupInviteUrl: isInviteLink ? rawTarget : '',
     whatsappLink
+  };
+}
+
+async function generateHomeworkPdf(sessionUser, payload) {
+  const date = normalizeDateStr(payload.date || todayIso());
+  const className = (payload.className || '').trim();
+  const profile = await resolveTeacherProfile(sessionUser);
+  const consolidated = await getConsolidatedHomework(sessionUser, date, className);
+  if (consolidated.status !== 'success') return consolidated;
+
+  if (!config.gasWebAppUrl) {
+    return { status: 'error', message: 'GAS WebApp URL is required to generate PDF in Google Drive.' };
+  }
+
+  const pdfRes = await callGasBridge('generateHomeworkPdf', {
+    date: consolidated.date,
+    friendlyDate: consolidated.friendlyDate,
+    className: consolidated.className,
+    classTeacher: profile.teacherName,
+    items: consolidated.items,
+    tomorrowPeriods: consolidated.tomorrowPeriods,
+    tomorrowDayLabel: consolidated.tomorrowDayLabel
+  });
+
+  if (!pdfRes || pdfRes.status !== 'success') {
+    return { status: 'error', message: (pdfRes && pdfRes.message) || 'Failed to generate PDF in Google Drive.' };
+  }
+
+  const updated = await getConsolidatedHomework(sessionUser, date, className, pdfRes.pdfUrl);
+  return {
+    ...updated,
+    pdfFileName: pdfRes.fileName
   };
 }
 
@@ -767,5 +886,6 @@ module.exports = {
   listHomework,
   saveHomework,
   deleteHomework,
-  getConsolidatedHomework
+  getConsolidatedHomework,
+  generateHomeworkPdf
 };
