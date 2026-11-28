@@ -429,6 +429,22 @@ app.get('/api/homework/list', auth.requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/homework/history', auth.requireAuth, async (req, res) => {
+  try {
+    const { fromDate, toDate, className, subject, search } = req.query;
+    const result = await homeworkService.getHomeworkHistory(req.session.user, {
+      fromDate,
+      toDate,
+      className,
+      subject,
+      search
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 app.post('/api/homework/save', auth.requireAuth, async (req, res) => {
   try {
     const result = await homeworkService.saveHomework(req.session.user, req.body || {});
