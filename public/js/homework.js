@@ -179,16 +179,34 @@ function populateTeacherDropdowns(profile) {
   } else if (profile.assignedSubjects.length === 1) {
     subjSel.value = profile.assignedSubjects[0];
   }
+
+  const filterSel = document.getElementById('hwSubmittedClassFilter');
+  if (filterSel) {
+    const prevFilter = filterSel.value;
+    const filterClasses = Array.from(new Set([...(profile.assignedClasses || []), ...(profile.classTeacherOf || [])]));
+    filterSel.innerHTML = '<option value="">All Classes</option>';
+    filterClasses.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      filterSel.appendChild(opt);
+    });
+    if (prevFilter && filterClasses.includes(prevFilter)) {
+      filterSel.value = prevFilter;
+    }
+  }
 }
 
 async function loadMyHomeworkList() {
   const date = (document.getElementById('hwDate') || {}).value || getTodayIsoDate();
+  const classFilter = (document.getElementById('hwSubmittedClassFilter') || {}).value || '';
   const listEl = document.getElementById('hwMyListContainer');
   if (!listEl) return;
 
   listEl.innerHTML = '<div class="loading-recent"><div class="spinner"></div><p>Loading homework...</p></div>';
   try {
-    const res = await apiCall(`/api/homework/list?date=${encodeURIComponent(date)}`);
+    const url = `/api/homework/list?date=${encodeURIComponent(date)}${classFilter ? `&className=${encodeURIComponent(classFilter)}` : ''}`;
+    const res = await apiCall(url);
     if (!res || res.status !== 'success') {
       listEl.innerHTML = `<p style="color: #ef4444;">${escapeHwHtml((res && res.message) || 'Failed to load homework.')}</p>`;
       return;
