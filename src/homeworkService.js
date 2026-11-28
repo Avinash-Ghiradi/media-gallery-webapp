@@ -95,6 +95,24 @@ function todayIso() {
   return `${y}-${m}-${d}`;
 }
 
+function normalizeDateStr(val) {
+  const s = String(val || '').trim().replace(/^'/, '');
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmy) {
+    return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  }
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return s;
+}
+
 function formatDateFriendly(dateStr) {
   if (!dateStr) return '';
   const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -387,7 +405,7 @@ async function ensureHomeworkHeaders(sheets) {
 function normalizeHwRow(r) {
   return {
     id: r.homeworkid || r.id || `HW-${r._rowIndex || ''}`,
-    date: r.date || r.homeworkdate || '',
+    date: normalizeDateStr(r.date || r.homeworkdate || ''),
     className: r.class || r.classname || '',
     subject: r.subject || r.subjectname || '',
     teacherName: r.teachername || r.teacher || r.createdby || '',
@@ -412,7 +430,7 @@ async function readAllHomework() {
 }
 
 async function listHomework(sessionUser, date, className) {
-  const targetDate = date || todayIso();
+  const targetDate = normalizeDateStr(date || todayIso());
   const profile = await resolveTeacherProfile(sessionUser);
   const { items, source } = await readAllHomework();
 
@@ -434,7 +452,7 @@ function buildRowFromHeaders(headers, record) {
   return headers.map(h => {
     const key = h.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (key === 'homeworkid' || key === 'id') return record.id;
-    if (key === 'date' || key === 'homeworkdate') return `'${record.date}`;
+    if (key === 'date' || key === 'homeworkdate') return record.date;
     if (key === 'class' || key === 'classname') return record.className;
     if (key === 'subject' || key === 'subjectname') return record.subject;
     if (key === 'teachername' || key === 'teacher' || key === 'createdby') return record.teacherName;
@@ -448,7 +466,7 @@ function buildRowFromHeaders(headers, record) {
 
 async function saveHomework(sessionUser, payload) {
   const profile = await resolveTeacherProfile(sessionUser);
-  const date = (payload.date || todayIso()).trim();
+  const date = normalizeDateStr(payload.date || todayIso());
   const className = (payload.className || '').trim();
   const subject = (payload.subject || '').trim();
   const description = (payload.description || '').trim();
@@ -480,36 +498,51 @@ async function saveHomework(sessionUser, payload) {
   const sheets = getSheetsClient();
   if (sheets && config.homeworkSheetId) {
     try {
+      await ensureHomeworkSheets();
       const headers = await ensureHomeworkHeaders(sheets);
       const { items } = await readAllHomework();
+
+      const updatedItems = items.filter(
+        x => !(x.date === date &&
+          x.className.toLowerCase() === className.toLowerCase() &&
+          x.subject.toLowerCase() === subject.toLowerCase())
+      );
+
       const existing = items.find(
         x => x.date === date &&
           x.className.toLowerCase() === className.toLowerCase() &&
           x.subject.toLowerCase() === subject.toLowerCase()
       );
+      if (existing) record.id = existing.id;
 
-      if (existing && existing._rowIndex) {
-        record.id = existing.id;
-        const rowValues = buildRowFromHeaders(headers, record);
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: config.homeworkSheetId,
-          range: `Homework!A${existing._rowIndex}`,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: { values: [rowValues] }
-        });
-      } else {
-        const rowValues = buildRowFromHeaders(headers, record);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: config.homeworkSheetId,
-          range: 'Homework!A:Z',
-          valueInputOption: 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [rowValues] }
-        });
-      }
-      return { status: 'success', source: 'google-sheet', item: record, message: 'Homework saved to Google Sheet.' };
+      updatedItems.push(record);
+
+      // Sort datewise (newest date first, then class, then subject)
+      updatedItems.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        const clsCmp = a.className.localeCompare(b.className);
+        if (clsCmp !== 0) return clsCmp;
+        return a.subject.localeCompare(b.subject);
+      });
+
+      const allRows = [headers, ...updatedItems.map(item => buildRowFromHeaders(headers, item))];
+
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: config.homeworkSheetId,
+        range: 'Homework!A:Z'
+      });
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: config.homeworkSheetId,
+        range: 'Homework!A1',
+        valueInputOption: 'RAW',
+        requestBody: { values: allRows }
+      });
+
+      return { status: 'success', source: 'google-sheet', item: record, message: 'Homework saved datewise to Google Sheet.' };
     } catch (err) {
-      console.warn('Google Sheet homework save failed, using fallback:', err.message);
+      console.error('Google Sheet homework save failed:', err.message);
+      return { status: 'error', message: `Failed to save homework to Google Sheet: ${err.message}` };
     }
   }
 
@@ -579,7 +612,7 @@ async function deleteHomework(sessionUser, homeworkId) {
 }
 
 async function getConsolidatedHomework(sessionUser, date, className) {
-  const targetDate = date || todayIso();
+  const targetDate = normalizeDateStr(date || todayIso());
   const profile = await resolveTeacherProfile(sessionUser);
 
   if (!profile.isAdmin && !profile.isClassTeacher) {
