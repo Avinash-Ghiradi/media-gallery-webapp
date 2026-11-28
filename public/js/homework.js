@@ -773,6 +773,41 @@ function setupClassTeacherSection(profile) {
   }
 }
 
+function updateSendWhatsAppLockUI(alreadySent, sentInfo) {
+  const sendBtn = document.getElementById('hwSendWhatsAppBtn');
+  const unlockBtn = document.getElementById('hwResendUnlockBtn');
+  if (!sendBtn) return;
+
+  if (alreadySent) {
+    sendBtn.disabled = true;
+    sendBtn.style.opacity = '0.6';
+    sendBtn.style.cursor = 'not-allowed';
+    sendBtn.innerHTML = '<i class="fas fa-check-circle"></i> Already Sent';
+    if (sentInfo && sentInfo.sentAt) {
+      sendBtn.title = `Sent at ${sentInfo.sentAt}`;
+    }
+    if (unlockBtn) unlockBtn.style.display = 'inline-flex';
+  } else {
+    sendBtn.disabled = false;
+    sendBtn.style.opacity = '1';
+    sendBtn.style.cursor = 'pointer';
+    sendBtn.innerHTML = '<i class="fab fa-whatsapp"></i> Send to WhatsApp';
+    sendBtn.title = '';
+    if (unlockBtn) unlockBtn.style.display = 'none';
+  }
+}
+
+function unlockResendHomework() {
+  const pin = window.prompt('This class homework was already sent. Enter PIN to unlock and re-send:');
+  if (pin === null) return;
+  if (pin.trim() === 'Success@123') {
+    updateSendWhatsAppLockUI(false, null);
+    showStatus('Send to WhatsApp unlocked. You can send again now.', 'success');
+  } else {
+    showStatus('Incorrect PIN. Send to WhatsApp remains locked.', 'error');
+  }
+}
+
 async function loadConsolidatedHomework() {
   const date = (document.getElementById('hwCtDate') || {}).value || getTodayIsoDate();
   const className = (document.getElementById('hwCtClassSelect') || {}).value || '';
@@ -796,6 +831,7 @@ async function loadConsolidatedHomework() {
 
     hwConsolidatedData = res;
     previewEl.value = res.formattedMessage || '';
+    updateSendWhatsAppLockUI(!!res.alreadySent, res.sentInfo || null);
 
     if (countEl) {
       const n = (res.items || []).length;
@@ -876,8 +912,8 @@ async function loadHomeworkTracker() {
 
     const classRows = classLights.map(c => {
       const waText = c.sentInfo
-        ? `<span style="color:#15803d;font-weight:600;font-size:0.8rem;">Sent (${escapeHwHtml(c.sentInfo.sentAt)})</span>`
-        : `<span style="color:#b45309;font-weight:600;font-size:0.8rem;">Not Sent</span>`;
+        ? `<span title="Sent by ${escapeHwHtml(c.sentInfo.classTeacher)} at ${escapeHwHtml(c.sentInfo.sentAt)}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#dcfce7;color:#15803d;font-size:0.9rem;font-weight:700;"><i class="fas fa-check"></i></span>`
+        : `<span title="Not Sent" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#fee2e2;color:#dc2626;font-size:0.9rem;font-weight:700;"><i class="fas fa-times"></i></span>`;
       const pendingTip = (c.pendingTeachers || []).length > 0
         ? `<div style="font-size:0.75rem;color:#dc2626;">Pending: ${c.pendingTeachers.map(escapeHwHtml).join(', ')}</div>`
         : '';
@@ -955,11 +991,19 @@ async function loadHomeworkTracker() {
 }
 
 function sendConsolidatedToWhatsApp() {
+  const sendBtn = document.getElementById('hwSendWhatsAppBtn');
+  if (sendBtn && sendBtn.disabled) {
+    unlockResendHomework();
+    return;
+  }
+
   const previewEl = document.getElementById('hwConsolidatedPreview');
   const text = previewEl ? previewEl.value.trim() : '';
   if (!text) return showStatus('No consolidated homework message to send.', 'error');
 
   if (hwConsolidatedData) {
+    hwConsolidatedData.alreadySent = true;
+    updateSendWhatsAppLockUI(true, null);
     apiCall('/api/homework/mark-sent', 'POST', {
       date: hwConsolidatedData.date,
       className: hwConsolidatedData.className,
