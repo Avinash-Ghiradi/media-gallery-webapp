@@ -31,13 +31,50 @@ function escapeHwHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+let hwActiveSubTab = 'add';
+
+function switchHomeworkSubTab(subTab) {
+  hwActiveSubTab = subTab || 'add';
+  document.querySelectorAll('#homeworkSubNav .hw-tab-button').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-hw-tab') === hwActiveSubTab);
+  });
+
+  const addSec = document.getElementById('hwSectionAdd');
+  const subSec = document.getElementById('hwSectionSubmitted');
+  const sendSec = document.getElementById('hwSectionSend');
+
+  if (addSec) addSec.style.display = hwActiveSubTab === 'add' ? 'block' : 'none';
+  if (subSec) subSec.style.display = hwActiveSubTab === 'submitted' ? 'block' : 'none';
+  if (sendSec) sendSec.style.display = hwActiveSubTab === 'send' ? 'block' : 'none';
+
+  if (hwActiveSubTab === 'submitted') {
+    const d1 = document.getElementById('hwDate');
+    const d2 = document.getElementById('hwSubmittedDate');
+    if (d1 && d2 && d1.value) d2.value = d1.value;
+    loadMyHomeworkList();
+  } else if (hwActiveSubTab === 'send') {
+    loadConsolidatedHomework();
+  }
+}
+
+function syncHomeworkDate(val) {
+  const d1 = document.getElementById('hwDate');
+  const d2 = document.getElementById('hwSubmittedDate');
+  if (d1 && val) d1.value = val;
+  if (d2 && val) d2.value = val;
+  loadMyHomeworkList();
+}
+
 async function initializeHomeworkTab() {
   const dateInput = document.getElementById('hwDate');
+  const subDateInput = document.getElementById('hwSubmittedDate');
   const ctDateInput = document.getElementById('hwCtDate');
   const today = getTodayIsoDate();
   if (dateInput && !dateInput.value) dateInput.value = today;
+  if (subDateInput && !subDateInput.value) subDateInput.value = today;
   if (ctDateInput && !ctDateInput.value) ctDateInput.value = today;
 
+  switchHomeworkSubTab(hwActiveSubTab || 'add');
   await loadHomeworkProfile();
 }
 
@@ -390,6 +427,7 @@ function editHomeworkItem(id) {
     }
   }
 
+  switchHomeworkSubTab('add');
   showStatus(`Loaded ${item.className} - ${item.subject} for editing`, 'info');
 }
 
@@ -488,16 +526,17 @@ async function deleteHomeworkItem(id) {
 }
 
 function setupClassTeacherSection(profile) {
-  const card = document.getElementById('hwClassTeacherCard');
+  const navBtn = document.getElementById('hwClassTeacherNavBtn');
   const ctClassSel = document.getElementById('hwCtClassSelect');
-  if (!card || !ctClassSel) return;
+  if (!ctClassSel) return;
 
   if (!profile.isClassTeacher || (profile.classTeacherOf || []).length === 0) {
-    card.style.display = 'none';
+    if (navBtn) navBtn.style.display = 'none';
+    if (hwActiveSubTab === 'send') switchHomeworkSubTab('add');
     return;
   }
 
-  card.style.display = 'block';
+  if (navBtn) navBtn.style.display = '';
   ctClassSel.innerHTML = '';
   profile.classTeacherOf.forEach(c => {
     const opt = document.createElement('option');
@@ -508,7 +547,9 @@ function setupClassTeacherSection(profile) {
 
   if (profile.classTeacherOf.length > 0) {
     ctClassSel.value = profile.classTeacherOf[0];
-    loadConsolidatedHomework();
+    if (hwActiveSubTab === 'send') {
+      loadConsolidatedHomework();
+    }
   }
 }
 
