@@ -208,6 +208,43 @@ body {
 }
 
 /* Navigation */
+.section-switcher {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  padding: 0.65rem 1.5rem;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+}
+
+.section-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--light-gray);
+  color: var(--gray);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.section-switch-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.section-switch-btn.active {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: var(--white);
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
 .tabs-navigation {
   display: flex;
   background: var(--light-gray);
@@ -2096,6 +2133,16 @@ select:disabled {
   }
 
   /* Fixed Bottom App Navigation Bar on Mobile */
+  .section-switcher {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .section-switch-btn {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
   .tabs-navigation {
     position: fixed;
     bottom: 0;
