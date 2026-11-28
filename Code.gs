@@ -2132,13 +2132,16 @@ function generateHomeworkPdfInDrive(payload) {
     var logoDataUri = '';
     try {
       var branding = getBrandingFromSheet();
-      var logoUrl = (branding && (branding.photoLogoUrl || branding.appLogoUrl)) || 'https://lh3.googleusercontent.com/d/1AviNbKi5ho_GHCTkA1ugcCu49l2cE62F';
+      var logoUrl = (branding && (branding.appLogoUrl || branding.photoLogoUrl)) || 'https://lh3.googleusercontent.com/d/1stbNALlpjg5CCGlXXX84l29UoolnvrbN';
       var logoIdMatch = String(logoUrl).match(/[-\w]{25,}/);
       if (logoIdMatch) {
-        var logoBlob = DriveApp.getFileById(logoIdMatch[0]).getBlob();
-        logoDataUri = 'data:' + (logoBlob.getContentType() || 'image/png') + ';base64,' + Utilities.base64Encode(logoBlob.getBytes());
-      } else if (/^https?:\/\//i.test(logoUrl)) {
-        var resp = UrlFetchApp.fetch(logoUrl, { muteHttpExceptions: true });
+        try {
+          var logoBlob = DriveApp.getFileById(logoIdMatch[0]).getBlob();
+          logoDataUri = 'data:' + (logoBlob.getContentType() || 'image/png') + ';base64,' + Utilities.base64Encode(logoBlob.getBytes());
+        } catch (driveLogoErr) {}
+      }
+      if (!logoDataUri && /^https?:\/\//i.test(logoUrl)) {
+        var resp = UrlFetchApp.fetch(logoUrl, { muteHttpExceptions: true, followRedirects: true });
         if (resp.getResponseCode() === 200) {
           var fetchedBlob = resp.getBlob();
           logoDataUri = 'data:' + (fetchedBlob.getContentType() || 'image/png') + ';base64,' + Utilities.base64Encode(fetchedBlob.getBytes());
@@ -2253,18 +2256,16 @@ function generateHomeworkPdfInDrive(payload) {
 
     var blob = HtmlService.createHtmlOutput(html).getAs('application/pdf');
     var safeClass = className.replace(/[^a-zA-Z0-9_-]/g, '_');
-    var fileName = 'Homework_' + safeClass + '_' + (dateIso || 'Notice') + '.pdf';
+    var timeSuffix = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'HHmmss');
+    var fileName = 'Homework_' + safeClass + '_' + (dateIso || 'Notice') + '_' + timeSuffix + '.pdf';
     blob.setName(fileName);
 
     var rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
     var subFolders = rootFolder.getFoldersByName('Daily Homework PDFs');
     var pdfFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder('Daily Homework PDFs');
-
-    // Replace existing PDF with same name if regenerating for same class & date
-    var existingFiles = pdfFolder.getFilesByName(fileName);
-    while (existingFiles.hasNext()) {
-      existingFiles.next().setTrashed(true);
-    }
+    try {
+      pdfFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareFolderErr) {}
 
     var file = pdfFolder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
