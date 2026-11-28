@@ -9,7 +9,6 @@ const config = require('./src/config');
 const auth = require('./src/auth');
 const googleService = require('./src/googleService');
 const videoWatermark = require('./src/videoWatermark');
-const homeworkService = require('./src/homeworkService');
 
 const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
 const upload = multer({
@@ -685,50 +684,6 @@ if (fs.existsSync(CUSTOM_PUBLIC_LOGO)) {
 } else {
   ensurePersistentAppLogoLoaded();
 }
-
-/* ==========================================================================
-   DAILY HOMEWORK, EXAMS & TIMETABLE ROUTES (Protected)
-   ========================================================================== */
-
-app.get('/api/academic/bootstrap', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.getBootstrapData());
-});
-
-app.get('/api/academic/homework', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.getHomeworkList(req.query || {}));
-});
-
-app.post('/api/academic/homework', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.saveHomework(req.body || {}, req.session.user || {}));
-});
-
-app.delete('/api/academic/homework/:id', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.deleteHomework(req.params.id));
-});
-
-app.post('/api/academic/homework/batch', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.createAndSendBatch(req.body || {}));
-});
-
-app.post('/api/academic/homework/batch/:batchId/revert', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.revertBatch(req.params.batchId));
-});
-
-app.get('/api/academic/exams', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.getExamPapers(req.query || {}));
-});
-
-app.post('/api/academic/exams', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.saveExamPaper(req.body || {}, req.session.user || {}));
-});
-
-app.delete('/api/academic/exams/:examId', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.deleteExamPaper(req.params.examId));
-});
-
-app.get('/api/academic/timetable', auth.requireAuth, (req, res) => {
-  res.json(homeworkService.getTimetableData(req.query.class || ''));
-});
 
 // Fallback index.html for SPA routing
 app.get('*', (req, res) => {
