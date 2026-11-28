@@ -927,15 +927,20 @@ async function loadHomeworkTracker() {
         ? `<span title="Sent by ${escapeHwHtml(c.sentInfo.classTeacher)} at ${escapeHwHtml(c.sentInfo.sentAt)}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#dcfce7;color:#15803d;font-size:0.9rem;font-weight:700;"><i class="fas fa-check"></i></span>`
         : `<span title="Not Sent" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#fee2e2;color:#dc2626;font-size:0.9rem;font-weight:700;"><i class="fas fa-times"></i></span>`;
       const pendingTip = (c.pendingTeachers || []).length > 0
-        ? `<div style="font-size:0.75rem;color:#dc2626;">Pending: ${c.pendingTeachers.map(escapeHwHtml).join(', ')}</div>`
+        ? `<div style="font-size:0.74rem;color:#dc2626;margin-top:2px;">Pending: ${c.pendingTeachers.map(escapeHwHtml).join(', ')}</div>`
         : '';
+      const subjPills = (c.subjectStatuses || []).map(st =>
+        st.submitted
+          ? `<span style="display:inline-block;margin:2px 3px 0 0;padding:1px 6px;border-radius:999px;background:#dcfce7;color:#15803d;font-size:0.72rem;font-weight:600;">&#10003; ${escapeHwHtml(st.subject)}</span>`
+          : `<span style="display:inline-block;margin:2px 3px 0 0;padding:1px 6px;border-radius:999px;background:#fee2e2;color:#dc2626;font-size:0.72rem;font-weight:600;">&#10007; ${escapeHwHtml(st.subject)}</span>`
+      ).join('');
       return `
         <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:10px 8px;text-align:center;">${renderTrafficDot(c.light)}</td>
-          <td style="padding:10px 8px;"><strong>${escapeHwHtml(c.className)}</strong>${pendingTip}</td>
-          <td style="padding:10px 8px;font-size:0.84rem;color:#475569;">${escapeHwHtml(c.classTeacher)}</td>
-          <td style="padding:10px 8px;text-align:center;font-weight:600;font-size:0.84rem;">${c.submittedTeachersCount}/${c.expectedTeachersCount}</td>
-          <td style="padding:10px 8px;">${waText}</td>
+          <td style="padding:10px 8px;text-align:center;vertical-align:top;">${renderTrafficDot(c.light)}</td>
+          <td style="padding:10px 8px;vertical-align:top;"><strong>${escapeHwHtml(c.className)}</strong><div style="margin-top:3px;">${subjPills}</div>${pendingTip}</td>
+          <td style="padding:10px 8px;font-size:0.84rem;color:#475569;vertical-align:top;">${escapeHwHtml(c.classTeacher)}</td>
+          <td style="padding:10px 8px;text-align:center;font-weight:600;font-size:0.84rem;vertical-align:top;">${c.submittedTeachersCount}/${c.expectedTeachersCount}</td>
+          <td style="padding:10px 8px;text-align:center;vertical-align:top;">${waText}</td>
         </tr>
       `;
     }).join('');
