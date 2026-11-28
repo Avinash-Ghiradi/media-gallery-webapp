@@ -514,21 +514,36 @@ async function readAllHomework() {
   return { source: 'fallback', headers: [], items: fallback.homework || [] };
 }
 
+function isHomeworkOwner(item, profile) {
+  if (!item || !profile) return false;
+  if (profile.isAdmin) return true;
+  const byName = item.teacherName && profile.teacherName &&
+    normalizeName(item.teacherName) === normalizeName(profile.teacherName);
+  const byPhone = item.teacherPhone && profile.teacherPhone &&
+    normalizePhone(item.teacherPhone) === normalizePhone(profile.teacherPhone);
+  return !!(byName || byPhone);
+}
+
 async function listHomework(sessionUser, date, className) {
   const targetDate = normalizeDateStr(date || todayIso());
   const profile = await resolveTeacherProfile(sessionUser);
   const { items, source } = await readAllHomework();
 
-  const filtered = items.filter(item => {
-    if (item.date !== targetDate) return false;
-    if (className && item.className.toLowerCase() !== className.toLowerCase()) return false;
-    if (!profile.isAdmin) {
-      const inAssignedClass = profile.assignedClasses.some(c => c.toLowerCase() === item.className.toLowerCase());
-      const isClassTeacherClass = profile.classTeacherOf.some(c => c.toLowerCase() === item.className.toLowerCase());
-      if (!inAssignedClass && !isClassTeacherClass) return false;
-    }
-    return true;
-  });
+  const filtered = items
+    .filter(item => {
+      if (item.date !== targetDate) return false;
+      if (className && item.className.toLowerCase() !== className.toLowerCase()) return false;
+      if (!profile.isAdmin) {
+        const inAssignedClass = profile.assignedClasses.some(c => c.toLowerCase() === item.className.toLowerCase());
+        const isClassTeacherClass = profile.classTeacherOf.some(c => c.toLowerCase() === item.className.toLowerCase());
+        if (!inAssignedClass && !isClassTeacherClass) return false;
+      }
+      return true;
+    })
+    .map(item => ({
+      ...item,
+      canModify: isHomeworkOwner(item, profile)
+    }));
 
   return { status: 'success', source, date: targetDate, items: filtered };
 }
@@ -576,6 +591,20 @@ async function saveHomework(sessionUser, payload) {
     if (!hasClass || !hasSubject) {
       return { status: 'error', message: 'You can only add homework for your assigned classes and subjects.' };
     }
+  }
+
+  // Prevent overwriting another teacher's homework entry
+  const existingData = await readAllHomework();
+  const existingMatch = (existingData.items || []).find(
+    x => x.date === date &&
+      x.className.toLowerCase() === className.toLowerCase() &&
+      x.subject.toLowerCase() === subject.toLowerCase()
+  );
+  if (existingMatch && !isHomeworkOwner(existingMatch, profile)) {
+    return {
+      status: 'error',
+      message: `Only ${existingMatch.teacherName || 'the original teacher'} can update this homework. You cannot modify another teacher's homework.`
+    };
   }
 
   const nowStr = nowIstString();
@@ -680,12 +709,8 @@ async function deleteHomework(sessionUser, homeworkId) {
   const target = items.find(x => x.id === homeworkId);
   if (!target) return { status: 'error', message: 'Homework entry not found.' };
 
-  if (!profile.isAdmin) {
-    const isOwner = normalizeName(target.teacherName) === normalizeName(profile.teacherName);
-    const isCt = profile.classTeacherOf.some(c => c.toLowerCase() === target.className.toLowerCase());
-    if (!isOwner && !isCt) {
-      return { status: 'error', message: 'You can only delete your own homework or your class homework.' };
-    }
+  if (!isHomeworkOwner(target, profile)) {
+    return { status: 'error', message: `Only ${target.teacherName || 'the original teacher'} can delete this homework.` };
   }
 
   const sheets = getSheetsClient();
