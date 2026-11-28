@@ -171,7 +171,7 @@
         <i class="fas fa-history"></i>
         <span>History</span>
       </button>
-      <button type="button" class="tab-button hw-tab-button" data-hw-tab="tracker" onclick="switchHomeworkSubTab('tracker')">
+      <button type="button" class="tab-button hw-tab-button" id="hwTrackerNavBtn" data-hw-tab="tracker" onclick="switchHomeworkSubTab('tracker')" style="display: none;">
         <i class="fas fa-traffic-light"></i>
         <span>Status</span>
       </button>
@@ -865,8 +865,8 @@
                 <p style="color: #64748b;">Loading class status...</p>
               </div>
             </div>
-            <div class="card">
-              <div class="card-title"><i class="fas fa-users"></i> All Teachers Homework Status</div>
+            <div class="card" id="hwTrackerTeachersCard">
+              <div class="card-title"><i class="fas fa-users"></i> Teachers Submission Status</div>
               <div id="hwTrackerTeachersBox">
                 <p style="color: #64748b;">Loading teachers status...</p>
               </div>
