@@ -354,10 +354,6 @@ function sendConsolidatedToWhatsApp() {
   const text = previewEl ? previewEl.value.trim() : '';
   if (!text) return showStatus('No consolidated homework message to send.', 'error');
 
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).catch(() => {});
-  }
-
   const rawTarget = hwConsolidatedData && hwConsolidatedData.whatsappGroup && hwConsolidatedData.whatsappGroup.phoneOrLink
     ? String(hwConsolidatedData.whatsappGroup.phoneOrLink).trim()
     : '';
