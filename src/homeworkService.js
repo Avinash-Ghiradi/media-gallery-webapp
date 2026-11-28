@@ -279,12 +279,7 @@ async function readSheetTab(tabName) {
 }
 
 async function loadMetadata() {
-  const [usersTab, groupsTab] = await Promise.all([
-    readSheetTab(config.usersSheetName || 'users'),
-    readSheetTab('WhatsAppGroups')
-  ]);
-
-  if (!usersTab && config.gasWebAppUrl) {
+  if (config.gasWebAppUrl) {
     const gasBundle = await callGasBridge('getHomeworkBundle');
     if (gasBundle && gasBundle.status === 'success') {
       const usersList = gasBundle.usersList || [];
@@ -303,6 +298,11 @@ async function loadMetadata() {
       };
     }
   }
+
+  const [usersTab, groupsTab] = await Promise.all([
+    readSheetTab(config.usersSheetName || 'users'),
+    readSheetTab('WhatsAppGroups')
+  ]);
 
   const fallback = readFallbackData();
 
@@ -458,14 +458,6 @@ function normalizeHwRow(r) {
 }
 
 async function readAllHomework() {
-  const tab = await readSheetTab('Homework');
-  if (tab) {
-    return {
-      source: 'google-sheet',
-      headers: tab.headers,
-      items: tab.items.map(normalizeHwRow).filter(x => x.date || x.className || x.subject)
-    };
-  }
   if (config.gasWebAppUrl) {
     const gasBundle = await callGasBridge('getHomeworkBundle');
     if (gasBundle && gasBundle.status === 'success') {
@@ -475,6 +467,14 @@ async function readAllHomework() {
         items: (gasBundle.homework || []).map(x => ({ ...x, date: normalizeDateStr(x.date) }))
       };
     }
+  }
+  const tab = await readSheetTab('Homework');
+  if (tab) {
+    return {
+      source: 'google-sheet',
+      headers: tab.headers,
+      items: tab.items.map(normalizeHwRow).filter(x => x.date || x.className || x.subject)
+    };
   }
   const fallback = readFallbackData();
   return { source: 'fallback', headers: [], items: fallback.homework || [] };
@@ -546,6 +546,17 @@ async function saveHomework(sessionUser, payload) {
     updatedAt: nowStr
   };
 
+  if (config.gasWebAppUrl) {
+    const gasRes = await callGasBridge('saveHomeworkInSheet', { record });
+    if (gasRes && gasRes.status === 'success') {
+      record.id = gasRes.id || record.id;
+      return { status: 'success', source: 'google-sheet', item: record, message: gasRes.message || 'Homework saved datewise to Google Sheet.' };
+    }
+    if (gasRes && gasRes.status === 'error') {
+      console.warn('GAS saveHomeworkInSheet error:', gasRes.message);
+    }
+  }
+
   const sheets = getSheetsClient();
   if (sheets && config.homeworkSheetId) {
     try {
@@ -594,17 +605,6 @@ async function saveHomework(sessionUser, payload) {
     } catch (err) {
       console.error('Google Sheet homework save failed:', err.message);
       return { status: 'error', message: `Failed to save homework to Google Sheet: ${err.message}` };
-    }
-  }
-
-  if (config.gasWebAppUrl) {
-    const gasRes = await callGasBridge('saveHomeworkInSheet', { record });
-    if (gasRes && gasRes.status === 'success') {
-      record.id = gasRes.id || record.id;
-      return { status: 'success', source: 'google-sheet', item: record, message: gasRes.message || 'Homework saved datewise to Google Sheet.' };
-    }
-    if (gasRes && gasRes.status === 'error') {
-      return { status: 'error', message: `Google Sheet save failed: ${gasRes.message}` };
     }
   }
 
